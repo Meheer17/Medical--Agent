@@ -28,7 +28,7 @@ class JWTUtil:
         Create a JWT access token
         
         Args:
-            data: Dictionary containing claims (e.g., {"sub": "user_email"})
+            data: Dictionary containing claims (e.g., {"sub": "user_email", "role": "patient"})
             expires_delta: Optional custom expiration time
         
         Returns:
@@ -93,3 +93,23 @@ class JWTUtil:
         if email is None:
             raise JWTError("Could not validate credentials")
         return email
+    
+    @staticmethod
+    def get_role_from_token(token: str) -> str:
+        """
+        Extract role from token
+        
+        Args:
+            token: JWT token string
+        
+        Returns:
+            Role from token
+        
+        Raises:
+            JWTError: If token is invalid
+        """
+        payload = JWTUtil.verify_token(token)
+        role: str = payload.get("role")
+        if role is None:
+            raise JWTError("Could not validate role")
+        return role

@@ -18,3 +18,114 @@ SELECT User, Host FROM mysql.user WHERE User='mahi';
 
 -- Show databases
 SHOW DATABASES;
+
+-- Use the database
+USE nithin_db;
+
+-- Create users table
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) NULL,
+    role ENUM('doctor', 'patient', 'lab') DEFAULT 'patient' NOT NULL,
+    doctor_code VARCHAR(20) UNIQUE NULL,
+    linked_doctor_id INT NULL,
+    phone VARCHAR(20) NULL,
+    address VARCHAR(500) NULL,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    is_verified BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    FOREIGN KEY (linked_doctor_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_email (email),
+    INDEX idx_username (username),
+    INDEX idx_role (role),
+    INDEX idx_doctor_code (doctor_code),
+    INDEX idx_linked_doctor_id (linked_doctor_id),
+    INDEX idx_is_active (is_active)
+);
+
+-- Create doctor_appointments table
+CREATE TABLE IF NOT EXISTS doctor_appointments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    doctor_id INT NOT NULL,
+    appointment_date DATETIME NOT NULL,
+    reason TEXT,
+    notes TEXT,
+    status ENUM('scheduled', 'confirmed', 'cancelled', 'completed') DEFAULT 'scheduled' NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_patient_id (patient_id),
+    INDEX idx_doctor_id (doctor_id),
+    INDEX idx_status (status),
+    INDEX idx_appointment_date (appointment_date)
+);
+
+-- Create lab_appointments table
+CREATE TABLE IF NOT EXISTS lab_appointments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    doctor_id INT,
+    lab_id INT NOT NULL,
+    appointment_date DATETIME NOT NULL,
+    test_type VARCHAR(255) NOT NULL,
+    reason TEXT,
+    notes TEXT,
+    status ENUM('scheduled', 'confirmed', 'cancelled', 'completed') DEFAULT 'scheduled' NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (lab_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_patient_id (patient_id),
+    INDEX idx_doctor_id (doctor_id),
+    INDEX idx_lab_id (lab_id),
+    INDEX idx_status (status),
+    INDEX idx_appointment_date (appointment_date)
+);
+
+-- Create lab_reports table
+CREATE TABLE IF NOT EXISTS lab_reports (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    appointment_id INT NOT NULL,
+    uploaded_by_id INT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size INT NOT NULL,
+    mime_type VARCHAR(50) DEFAULT 'application/pdf' NOT NULL,
+    test_results TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (appointment_id) REFERENCES lab_appointments(id) ON DELETE CASCADE,
+    FOREIGN KEY (uploaded_by_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_appointment_id (appointment_id),
+    INDEX idx_uploaded_by_id (uploaded_by_id),
+    INDEX idx_created_at (created_at),
+    UNIQUE KEY unique_appointment_id (appointment_id)
+);
+
+-- Create queries table for single query/response system
+CREATE TABLE IF NOT EXISTS queries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    doctor_id INT NOT NULL,
+    query_text TEXT NOT NULL,
+    response_text TEXT NULL,
+    urgency ENUM('low', 'medium', 'high') DEFAULT 'medium' NOT NULL,
+    is_responded BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    responded_at DATETIME NULL,
+    FOREIGN KEY (patient_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_patient_id (patient_id),
+    INDEX idx_doctor_id (doctor_id),
+    INDEX idx_is_responded (is_responded),
+    INDEX idx_urgency (urgency),
+    INDEX idx_created_at (created_at)
+);

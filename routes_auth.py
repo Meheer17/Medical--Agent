@@ -4,8 +4,12 @@ from sqlalchemy.exc import IntegrityError
 
 from database import get_db
 from models import User
-from schemas import UserRegister, UserLogin, Token, UserResponse, ErrorResponse
+from schemas import (
+    UserRegister, UserLogin, Token, UserResponse, ErrorResponse,
+    DoctorProfile, PatientProfile, LabProfile
+)
 from auth import PasswordUtil, JWTUtil
+from dependencies import get_current_active_user
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
@@ -52,6 +56,7 @@ async def signup(user_data: UserRegister, db: Session = Depends(get_db)):
             username=user_data.username,
             hashed_password=hashed_password,
             full_name=user_data.full_name,
+            role=user_data.role,
         )
         
         db.add(db_user)
@@ -109,8 +114,11 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
             detail="User account is deactivated",
         )
     
-    # Generate JWT token
-    access_token = JWTUtil.create_access_token(data={"sub": user.email})
+    # Generate JWT token with role
+    access_token = JWTUtil.create_access_token(data={
+        "sub": user.email,
+        "role": user.role.value
+    })
     
     return {
         "access_token": access_token,
@@ -156,11 +164,65 @@ async def refresh_token(token: str, db: Session = Depends(get_db)):
             detail="User account is deactivated",
         )
     
-    # Generate new token
-    new_access_token = JWTUtil.create_access_token(data={"sub": user.email})
+    # Generate new token with role
+    new_access_token = JWTUtil.create_access_token(data={
+        "sub": user.email,
+        "role": user.role.value
+    })
     
     return {
         "access_token": new_access_token,
         "token_type": "bearer",
         "user": user
     }
+
+@router.get("/profile", tags=["authentication"])
+async def get_profile(current_user: User = Depends(get_current_active_user)):
+    """
+    Get user profile based on role
+    
+    Returns different profile information based on user role:
+    - **doctor**: Doctor profile with license and specialization info
+    - **patient**: Patient profile with verification status
+    - **lab**: Lab profile with lab-specific info
+    """
+    if current_user.role.value == "doctor":
+        return {
+            "role": "doctor",
+            "profile": DoctorProfile(
+                id=current_user.id,
+                email=current_user.email,
+                username=current_user.username,
+                full_name=current_user.full_name,
+                role=current_user.role,
+                is_active=current_user.is_active,
+                created_at=current_user.created_at,
+            )
+        }
+    elif current_user.role.value == "patient":
+        return {
+            "role": "patient",
+            "profile": PatientProfile(
+                id=current_user.id,
+                email=current_user.email,
+                username=current_user.username,
+                full_name=current_user.full_name,
+                role=current_user.role,
+                is_active=current_user.is_active,
+                is_verified=current_user.is_verified,
+                created_at=current_user.created_at,
+            )
+        }
+    elif current_user.role.value == "lab":
+        return {
+            "role": "lab",
+            "profile": LabProfile(
+                id=current_user.id,
+                email=current_user.email,
+                username=current_user.username,
+                full_name=current_user.full_name,
+                role=current_user.role,
+                is_active=current_user.is_active,
+                created_at=current_user.created_at,
+            )
+        }

@@ -4,7 +4,7 @@ from starlette.requests import Request
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User
+from models import User, UserRole
 from auth import JWTUtil
 
 security = HTTPBearer()
@@ -83,3 +83,57 @@ async def get_current_active_user(
             detail="User account is deactivated",
         )
     return current_user
+
+def get_user_with_role(required_roles: list[UserRole]):
+    """
+    Factory function to create a dependency that checks user role
+    
+    Args:
+        required_roles: List of allowed roles
+    
+    Returns:
+        Async dependency function
+    """
+    async def verify_role(
+        current_user: User = Depends(get_current_active_user),
+    ) -> User:
+        """
+        Verify that current user has one of the required roles
+        
+        Args:
+            current_user: Current authenticated user
+        
+        Returns:
+            Current user if role is authorized
+        
+        Raises:
+            HTTPException: If user role is not authorized
+        """
+        if current_user.role not in required_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"User role '{current_user.role}' is not authorized. Required roles: {', '.join([r.value for r in required_roles])}",
+            )
+        return current_user
+    
+    return verify_role
+
+# Specific role dependencies
+async def get_doctor_user(
+    current_user: User = Depends(get_user_with_role([UserRole.DOCTOR])),
+) -> User:
+    """Dependency for doctor-only endpoints"""
+    return current_user
+
+async def get_patient_user(
+    current_user: User = Depends(get_user_with_role([UserRole.PATIENT])),
+) -> User:
+    """Dependency for patient-only endpoints"""
+    return current_user
+
+async def get_lab_user(
+    current_user: User = Depends(get_user_with_role([UserRole.LAB])),
+) -> User:
+    """Dependency for lab-only endpoints"""
+    return current_user
+
