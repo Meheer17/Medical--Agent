@@ -112,6 +112,16 @@ class LabReport(Base):
     mime_type = Column(String(50), default="application/pdf", nullable=False)
     test_results = Column(Text, nullable=True)  # Summary or key findings
     notes = Column(Text, nullable=True)  # Lab notes about the report
+    
+    # AI-Generated Analysis Fields (Genkit)
+    ai_summary = Column(Text, nullable=True)  # AI-generated summary of report
+    ai_key_findings = Column(Text, nullable=True)  # JSON array of key findings
+    ai_abnormal_values = Column(Text, nullable=True)  # JSON array of abnormal values
+    ai_clinical_significance = Column(Text, nullable=True)  # AI interpretation
+    ai_doctor_recommendation = Column(Text, nullable=True)  # Always includes recommendation to visit doctor
+    ai_analysis_status = Column(String(50), default="pending", nullable=False)  # pending, completed, failed
+    ai_analysis_error = Column(Text, nullable=True)  # Error message if analysis failed
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -120,7 +130,7 @@ class LabReport(Base):
     uploaded_by = relationship("User", foreign_keys=[uploaded_by_id])
     
     def __repr__(self):
-        return f"<LabReport(id={self.id}, appointment_id={self.appointment_id}, file_name={self.file_name})>"
+        return f"<LabReport(id={self.id}, appointment_id={self.appointment_id}, file_name={self.file_name}, ai_status={self.ai_analysis_status})>"
 
 class Query(Base):
     """Model for single queries from patient to doctor"""

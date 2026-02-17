@@ -9,3 +9,10 @@ bcrypt==4.0.1
 pymysql==1.1.0
 python-multipart==0.0.7
 python-dotenv==1.0.1
+
+# Genkit & AI/LLM Dependencies
+google-generativeai>=0.3.0
+PyPDF2==3.0.1
+
+# COMMENTED OUT - Uncomment to use Ollama instead of Google AI
+# ollama>=0.1.0

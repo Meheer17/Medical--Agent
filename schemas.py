@@ -374,6 +374,25 @@ class LabReportUpdate(BaseModel):
             }
         }
 
+class AIAnalysisResult(BaseModel):
+    """Schema for AI analysis results"""
+    summary: Optional[str] = None
+    key_findings: Optional[list[str]] = None
+    abnormal_values: Optional[list[str]] = None
+    clinical_significance: Optional[str] = None
+    doctor_recommendation: str = "Patient should visit their doctor for proper interpretation and guidance of these lab results."
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "summary": "Blood tests show slightly elevated glucose levels.",
+                "key_findings": ["Glucose: 110 mg/dL (normal: 70-100)", "Hemoglobin: 14.5 g/dL (normal)"],
+                "abnormal_values": ["Glucose: 110 mg/dL"],
+                "clinical_significance": "Slightly elevated glucose may indicate prediabetic condition.",
+                "doctor_recommendation": "Patient should visit their doctor for proper interpretation and guidance of these lab results."
+            }
+        }
+
 class LabReportResponse(BaseModel):
     """Schema for lab report response"""
     id: int
@@ -384,6 +403,16 @@ class LabReportResponse(BaseModel):
     mime_type: str
     test_results: Optional[str]
     notes: Optional[str]
+    
+    # AI Analysis Fields
+    ai_summary: Optional[str] = None
+    ai_key_findings: Optional[str] = None  # JSON string
+    ai_abnormal_values: Optional[str] = None  # JSON string
+    ai_clinical_significance: Optional[str] = None
+    ai_doctor_recommendation: Optional[str] = None
+    ai_analysis_status: str = "pending"  # pending, completed, failed
+    ai_analysis_error: Optional[str] = None
+    
     created_at: datetime
     updated_at: datetime
     
@@ -399,6 +428,13 @@ class LabReportResponse(BaseModel):
                 "mime_type": "application/pdf",
                 "test_results": "All values within normal range",
                 "notes": "Patient in good health condition",
+                "ai_summary": "Blood tests show slightly elevated glucose levels.",
+                "ai_key_findings": "[\"Glucose: 110 mg/dL (normal: 70-100)\", \"Hemoglobin: 14.5 g/dL (normal)\"]",
+                "ai_abnormal_values": "[\"Glucose: 110 mg/dL\"]",
+                "ai_clinical_significance": "Slightly elevated glucose may indicate prediabetic condition.",
+                "ai_doctor_recommendation": "Patient should visit their doctor for proper interpretation and guidance of these lab results.",
+                "ai_analysis_status": "completed",
+                "ai_analysis_error": None,
                 "created_at": "2026-02-18T14:30:00",
                 "updated_at": "2026-02-18T14:30:00"
             }

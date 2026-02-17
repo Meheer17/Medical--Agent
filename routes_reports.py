@@ -1,13 +1,149 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
+import json
+import logging
 
 from database import get_db
 from models import User, LabAppointment, LabReport, UserRole
 from schemas import LabReportCreate, LabReportUpdate, LabReportResponse
 from dependencies import get_current_active_user, get_lab_user
 from file_storage import FileStorage
+from pdf_processor import get_report_processor
+from ai_field_validator import AIFieldValidator, validate_and_ensure_fields
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reports", tags=["lab-reports"])
+
+
+async def process_pdf_and_generate_analysis(report_id: int, file_path: str, db_session_factory):
+    """
+    Background task to extract PDF text and generate AI analysis
+    
+    Args:
+        report_id: ID of the report to update
+        file_path: Path to the uploaded PDF file
+        db_session_factory: Database session factory
+    """
+    try:
+        processor = get_report_processor()
+        
+        # Process PDF and generate analysis
+        result = await processor.process_pdf_report(
+            file_path=file_path,
+            test_type="laboratory"
+        )
+        
+        if result["status"] == "success":
+            analysis = result["analysis"]
+            
+            # Update database with AI analysis
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                report = db.query(LabReport).filter(LabReport.id == report_id).first()
+                if report:
+                    # Map all AI analysis fields from result
+                    report.ai_summary = analysis.get("summary", "")
+                    
+                    # Ensure key_findings is properly JSON stringified
+                    key_findings = analysis.get("key_findings", [])
+                    if isinstance(key_findings, list):
+                        report.ai_key_findings = json.dumps(key_findings)
+                    else:
+                        report.ai_key_findings = json.dumps([])
+                    
+                    # Ensure abnormal_values is properly JSON stringified
+                    abnormal_values = analysis.get("abnormal_values", [])
+                    if isinstance(abnormal_values, list):
+                        report.ai_abnormal_values = json.dumps(abnormal_values)
+                    else:
+                        report.ai_abnormal_values = json.dumps([])
+                    
+                    report.ai_clinical_significance = analysis.get("clinical_significance", "")
+                    
+                    # Ensure doctor recommendation always includes visit recommendation
+                    recommendation = analysis.get("doctor_recommendation", "")
+                    if recommendation and "doctor" not in recommendation.lower():
+                        recommendation += " Patient should visit their doctor for proper interpretation and guidance of these lab results."
+                    elif not recommendation:
+                        recommendation = "Patient should visit their doctor for proper interpretation and guidance of these lab results."
+                    report.ai_doctor_recommendation = recommendation
+                    
+                    # Mark analysis as completed
+                    report.ai_analysis_status = "completed"
+                    report.ai_analysis_error = None
+                    
+                    # Commit all changes
+                    db.commit()
+                    
+                    # Validate that all fields were properly stored
+                    db.refresh(report)
+                    validation_result = AIFieldValidator.validate_report_record(report)
+                    if validation_result['is_valid']:
+                        logger.info(f"✓ AI analysis completed and validated for report {report_id}")
+                    else:
+                        logger.warning(f"⚠ Validation warnings for report {report_id}: {validation_result['all_errors']}")
+                    
+                    logger.debug(f"Fields stored - Summary: {len(report.ai_summary or '')} chars, Key findings: {report.ai_key_findings}, Abnormal values: {report.ai_abnormal_values}")
+                else:
+                    logger.error(f"Report {report_id} not found in database after successful processing")
+            except Exception as e:
+                logger.error(f"Error updating report {report_id} with AI analysis: {e}")
+                # Update report with error status
+                try:
+                    report = db.query(LabReport).filter(LabReport.id == report_id).first()
+                    if report:
+                        report.ai_analysis_status = "failed"
+                        report.ai_analysis_error = str(e)
+                        # Keep other fields as is, just mark as failed
+                        db.commit()
+                        logger.error(f"Report {report_id} marked as failed due to storage error")
+                except Exception as inner_e:
+                    logger.error(f"Failed to update error status for report {report_id}: {inner_e}")
+                finally:
+                    db.close()
+            finally:
+                if db and hasattr(db, 'close'):
+                    db.close()
+        else:
+            # PDF processing failed, mark report with error
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                report = db.query(LabReport).filter(LabReport.id == report_id).first()
+                if report:
+                    report.ai_analysis_status = "failed"
+                    report.ai_analysis_error = result.get("error", "Unknown error processing PDF")
+                    db.commit()
+                    logger.error(f"Failed to process PDF for report {report_id}: {result.get('error')}")
+                else:
+                    logger.error(f"Report {report_id} not found to mark as failed")
+            except Exception as e:
+                logger.error(f"Error updating error status for report {report_id}: {e}")
+            finally:
+                if db and hasattr(db, 'close'):
+                    db.close()
+    
+    except Exception as e:
+        logger.error(f"Background task error for report {report_id}: {e}")
+        # Try to update report with error
+        try:
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                report = db.query(LabReport).filter(LabReport.id == report_id).first()
+                if report:
+                    report.ai_analysis_status = "failed"
+                    report.ai_analysis_error = str(e)
+                    db.commit()
+                    logger.error(f"Report {report_id} marked as failed with error: {str(e)}")
+                else:
+                    logger.error(f"Could not find report {report_id} to mark as failed")
+            finally:
+                db.close()
+        except Exception as inner_e:
+            logger.error(f"Failed to update error status for report {report_id}: {inner_e}")
 
 
 @router.post(
@@ -15,23 +151,36 @@ router = APIRouter(prefix="/api/reports", tags=["lab-reports"])
     response_model=LabReportResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload lab report",
-    description="Lab staff uploads a PDF report for a lab appointment"
+    description="Lab staff uploads a PDF report for a lab appointment. PDF will be automatically analyzed using AI."
 )
 async def upload_lab_report(
     appointment_id: int,
     file: UploadFile = File(...),
     test_results: str = None,
     notes: str = None,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_lab_user),
     db: Session = Depends(get_db)
 ):
     """
     Upload a lab report PDF for an appointment
     
+    **Features:**
+    - Accepts PDF files only
+    - Automatically extracts text from PDF
+    - Uses Google AI (Genkit) to generate analysis and summary
+    - Always includes recommendation to visit doctor
+    - Processing happens in background (report created immediately)
+    
+    **Parameters:**
     - **appointment_id**: ID of the lab appointment
     - **file**: PDF file to upload
-    - **test_results**: Summary of test results
-    - **notes**: Lab notes about the report
+    - **test_results**: Optional summary of test results
+    - **notes**: Optional lab notes about the report
+    
+    **Returns:**
+    - Initial report object with `ai_analysis_status: "pending"`
+    - AI analysis fields will be populated once background processing completes
     """
     # Verify appointment exists and belongs to this lab
     appointment = db.query(LabAppointment).filter(
@@ -67,7 +216,8 @@ async def upload_lab_report(
     unique_filename = FileStorage.generate_file_name(file.filename)
     file_path = FileStorage.save_file(file_content, unique_filename)
     
-    # Create database record
+    # Create database record with pending AI analysis status
+    # Initialize all AI fields to ensure proper storage
     db_report = LabReport(
         appointment_id=appointment_id,
         uploaded_by_id=current_user.id,
@@ -76,12 +226,44 @@ async def upload_lab_report(
         file_size=len(file_content),
         mime_type=mime_type,
         test_results=test_results,
-        notes=notes
+        notes=notes,
+        # Initialize all AI analysis fields
+        ai_summary=None,
+        ai_key_findings=None,
+        ai_abnormal_values=None,
+        ai_clinical_significance=None,
+        ai_doctor_recommendation="Patient should visit their doctor for proper interpretation and guidance of these lab results.",
+        ai_analysis_status="pending",
+        ai_analysis_error=None
     )
     
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
+    
+    # Validate that all fields were properly stored
+    validation_result = AIFieldValidator.validate_report_record(db_report)
+    if not validation_result['is_valid']:
+        logger.warning(f"⚠ Initial validation warnings for report {db_report.id}: {validation_result['all_errors']}")
+    else:
+        logger.info(f"✓ Report {db_report.id} initial field validation passed")
+    
+    # Add background task to process PDF and generate AI analysis
+    try:
+        background_tasks.add_task(
+            process_pdf_and_generate_analysis,
+            report_id=db_report.id,
+            file_path=file_path,
+            db_session_factory=None  # Not needed with current implementation
+        )
+        logger.info(f"✓ Background task queued for report {db_report.id} PDF analysis")
+    except Exception as e:
+        logger.error(f"Failed to queue background task for report {db_report.id}: {e}")
+        # Update report to show error
+        db_report.ai_analysis_status = "failed"
+        db_report.ai_analysis_error = f"Failed to queue analysis: {str(e)}"
+        db.commit()
+        db.refresh(db_report)
     
     return db_report
 
