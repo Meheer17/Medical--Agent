@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 import secrets
 
 from database import get_db
-from models import User, UserRole
-from schemas import PatientProfileUpdate, LinkDoctorRequest, PatientProfileResponse
+from models import User, UserRole, LabAppointment, DoctorAppointment, LabReport
+from schemas import PatientProfileUpdate, LinkDoctorRequest, PatientProfileResponse, LabReportResponse, DoctorAppointmentResponse, LabAppointmentResponse
 from dependencies import get_current_active_user, get_patient_user, get_doctor_user
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
@@ -95,6 +95,60 @@ async def link_to_doctor(
     db.refresh(current_user)
     
     return current_user
+
+
+@router.get(
+    "/doctors",
+    tags=["profiles"],
+    summary="List all doctors",
+    description="Get a list of all active doctors"
+)
+async def list_all_doctors(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """List all active doctors (available to any authenticated user)"""
+    doctors = db.query(User).filter(
+        User.role == UserRole.DOCTOR,
+        User.is_active == True
+    ).all()
+    return [
+        {
+            "id": d.id,
+            "name": d.full_name or d.username,
+            "email": d.email,
+            "username": d.username,
+            "phone": d.phone
+        }
+        for d in doctors
+    ]
+
+
+@router.get(
+    "/labs",
+    tags=["profiles"],
+    summary="List all labs",
+    description="Get a list of all active labs"
+)
+async def list_all_labs(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """List all active labs (available to any authenticated user)"""
+    labs = db.query(User).filter(
+        User.role == UserRole.LAB,
+        User.is_active == True
+    ).all()
+    return [
+        {
+            "id": l.id,
+            "name": l.full_name or l.username,
+            "email": l.email,
+            "username": l.username,
+            "phone": l.phone
+        }
+        for l in labs
+    ]
 
 
 @router.get(
@@ -280,3 +334,96 @@ async def unlink_from_doctor(
     db.refresh(current_user)
     
     return {"message": "Successfully unlinked from doctor"}
+
+
+@router.get(
+    "/patient/{patient_id}/reports",
+    response_model=list[LabReportResponse],
+    tags=["profiles"],
+    summary="Get patient reports",
+    description="Doctor gets all lab reports for a linked patient"
+)
+async def get_patient_reports(
+    patient_id: int,
+    current_user: User = Depends(get_doctor_user),
+    db: Session = Depends(get_db)
+):
+    """Get all lab reports for a specific patient linked to this doctor"""
+    patient = db.query(User).filter(
+        User.id == patient_id,
+        User.role == UserRole.PATIENT,
+        User.is_active == True
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    if patient.linked_doctor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Patient is not linked to you")
+
+    patient_appointments = db.query(LabAppointment.id).filter(
+        LabAppointment.patient_id == patient_id
+    ).all()
+    appointment_ids = [a[0] for a in patient_appointments]
+    if not appointment_ids:
+        return []
+    reports = db.query(LabReport).filter(
+        LabReport.appointment_id.in_(appointment_ids)
+    ).order_by(LabReport.created_at.desc()).all()
+    return reports
+
+
+@router.get(
+    "/patient/{patient_id}/doctor-appointments",
+    response_model=list[DoctorAppointmentResponse],
+    tags=["profiles"],
+    summary="Get patient doctor appointments",
+    description="Doctor gets all doctor appointments for a linked patient"
+)
+async def get_patient_doctor_appointments(
+    patient_id: int,
+    current_user: User = Depends(get_doctor_user),
+    db: Session = Depends(get_db)
+):
+    """Get all doctor appointments for a specific patient"""
+    patient = db.query(User).filter(
+        User.id == patient_id,
+        User.role == UserRole.PATIENT,
+        User.is_active == True
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    if patient.linked_doctor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Patient is not linked to you")
+
+    appointments = db.query(DoctorAppointment).filter(
+        DoctorAppointment.patient_id == patient_id
+    ).order_by(DoctorAppointment.created_at.desc()).all()
+    return appointments
+
+
+@router.get(
+    "/patient/{patient_id}/lab-appointments",
+    response_model=list[LabAppointmentResponse],
+    tags=["profiles"],
+    summary="Get patient lab appointments",
+    description="Doctor gets all lab appointments for a linked patient"
+)
+async def get_patient_lab_appointments(
+    patient_id: int,
+    current_user: User = Depends(get_doctor_user),
+    db: Session = Depends(get_db)
+):
+    """Get all lab appointments for a specific patient"""
+    patient = db.query(User).filter(
+        User.id == patient_id,
+        User.role == UserRole.PATIENT,
+        User.is_active == True
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    if patient.linked_doctor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Patient is not linked to you")
+
+    appointments = db.query(LabAppointment).filter(
+        LabAppointment.patient_id == patient_id
+    ).order_by(LabAppointment.created_at.desc()).all()
+    return appointments

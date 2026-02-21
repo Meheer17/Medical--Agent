@@ -237,6 +237,6 @@ async def get_pending_queries(
     queries = db.query(Query).filter(
         Query.doctor_id == current_user.id,
         Query.is_responded == False
-    ).order_by(Query.created_at).all()
+    ).order_by(Query.created_at.desc()).all()
     
     return queries

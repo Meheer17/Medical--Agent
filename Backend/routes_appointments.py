@@ -90,11 +90,11 @@ async def get_my_doctor_appointments(
     if current_user.role == UserRole.PATIENT:
         appointments = db.query(DoctorAppointment).filter(
             DoctorAppointment.patient_id == current_user.id
-        ).all()
+        ).order_by(DoctorAppointment.created_at.desc()).all()
     elif current_user.role == UserRole.DOCTOR:
         appointments = db.query(DoctorAppointment).filter(
             DoctorAppointment.doctor_id == current_user.id
-        ).all()
+        ).order_by(DoctorAppointment.created_at.desc()).all()
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -399,15 +399,15 @@ async def get_my_lab_appointments(
     if current_user.role == UserRole.PATIENT:
         appointments = db.query(LabAppointment).filter(
             LabAppointment.patient_id == current_user.id
-        ).all()
+        ).order_by(LabAppointment.created_at.desc()).all()
     elif current_user.role == UserRole.DOCTOR:
         appointments = db.query(LabAppointment).filter(
             LabAppointment.doctor_id == current_user.id
-        ).all()
+        ).order_by(LabAppointment.created_at.desc()).all()
     elif current_user.role == UserRole.LAB:
         appointments = db.query(LabAppointment).filter(
             LabAppointment.lab_id == current_user.id
-        ).all()
+        ).order_by(LabAppointment.created_at.desc()).all()
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

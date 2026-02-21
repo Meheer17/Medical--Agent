@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import json
 import logging
+import os
 
 from database import get_db
 from models import User, LabAppointment, LabReport, UserRole
@@ -282,7 +284,7 @@ async def get_lab_report(
     """
     Get lab report for an appointment
     
-    Only patient, assigned doctor, or lab can view the report
+    Only patient, assigned doctor, linked doctor, or lab can view the report
     """
     # Verify appointment exists
     appointment = db.query(LabAppointment).filter(
@@ -299,6 +301,12 @@ async def get_lab_report(
     is_patient = current_user.id == appointment.patient_id
     is_doctor = current_user.id == appointment.doctor_id if appointment.doctor_id else False
     is_lab = current_user.id == appointment.lab_id
+    
+    # Also allow the patient's linked doctor
+    if not is_doctor and current_user.role == UserRole.DOCTOR:
+        patient = db.query(User).filter(User.id == appointment.patient_id).first()
+        if patient and patient.linked_doctor_id == current_user.id:
+            is_doctor = True
     
     if not (is_patient or is_doctor or is_lab):
         raise HTTPException(
@@ -455,7 +463,7 @@ async def get_my_reports(
     if current_user.role == UserRole.LAB:
         reports = db.query(LabReport).filter(
             LabReport.uploaded_by_id == current_user.id
-        ).all()
+        ).order_by(LabReport.created_at.desc()).all()
     elif current_user.role == UserRole.PATIENT:
         # Get all lab appointments for patient
         patient_appointments = db.query(LabAppointment.id).filter(
@@ -466,7 +474,7 @@ async def get_my_reports(
         if appointment_ids:
             reports = db.query(LabReport).filter(
                 LabReport.appointment_id.in_(appointment_ids)
-            ).all()
+            ).order_by(LabReport.created_at.desc()).all()
         else:
             reports = []
     elif current_user.role == UserRole.DOCTOR:
@@ -479,7 +487,7 @@ async def get_my_reports(
         if appointment_ids:
             reports = db.query(LabReport).filter(
                 LabReport.appointment_id.in_(appointment_ids)
-            ).all()
+            ).order_by(LabReport.created_at.desc()).all()
         else:
             reports = []
     else:
@@ -489,3 +497,69 @@ async def get_my_reports(
         )
     
     return reports
+
+
+@router.get(
+    "/download/{appointment_id}",
+    summary="Download report PDF",
+    description="Download the PDF file for a lab report"
+)
+async def download_report_file(
+    appointment_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Download the PDF file for a lab report.
+    
+    Only patient, assigned doctor, linked doctor, or lab can download the file.
+    """
+    appointment = db.query(LabAppointment).filter(
+        LabAppointment.id == appointment_id
+    ).first()
+    
+    if not appointment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Appointment not found"
+        )
+    
+    # Check access permissions
+    is_patient = current_user.id == appointment.patient_id
+    is_doctor = current_user.id == appointment.doctor_id if appointment.doctor_id else False
+    is_lab = current_user.id == appointment.lab_id
+    
+    # Also allow the patient's linked doctor
+    if not is_doctor and current_user.role == UserRole.DOCTOR:
+        patient = db.query(User).filter(User.id == appointment.patient_id).first()
+        if patient and patient.linked_doctor_id == current_user.id:
+            is_doctor = True
+    
+    if not (is_patient or is_doctor or is_lab):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this report"
+        )
+    
+    report = db.query(LabReport).filter(
+        LabReport.appointment_id == appointment_id
+    ).first()
+    
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No report found for this appointment"
+        )
+    
+    file_path = report.file_path
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report file not found on server"
+        )
+    
+    return FileResponse(
+        path=file_path,
+        filename=report.file_name,
+        media_type=report.mime_type
+    )
