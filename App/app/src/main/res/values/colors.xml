@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#1565C0</color>
+    <color name="primary_dark">#0D47A1</color>
+    <color name="primary_light">#42A5F5</color>
+    <color name="secondary">#00897B</color>
+    <color name="secondary_dark">#00695C</color>
+    <color name="secondary_light">#4DB6AC</color>
+    <color name="accent">#FF6F00</color>
+
+    <color name="background">#F5F7FA</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="error">#D32F2F</color>
+
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="on_background">#1C1B1F</color>
+    <color name="on_surface">#1C1B1F</color>
+    <color name="on_error">#FFFFFF</color>
+
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_hint">#BDBDBD</color>
+
+    <color name="divider">#E0E0E0</color>
+    <color name="card_background">#FFFFFF</color>
+    <color name="card_stroke">#E8EAF0</color>
+
+    <color name="status_scheduled">#2196F3</color>
+    <color name="status_confirmed">#4CAF50</color>
+    <color name="status_cancelled">#F44336</color>
+    <color name="status_completed">#9E9E9E</color>
+
+    <color name="urgency_high">#F44336</color>
+    <color name="urgency_medium">#FF9800</color>
+    <color name="urgency_low">#4CAF50</color>
+
+    <color name="patient_primary">#1565C0</color>
+    <color name="patient_color">#1565C0</color>
+    <color name="patient_light">#E3F2FD</color>
+    <color name="doctor_primary">#2E7D32</color>
+    <color name="doctor_color">#2E7D32</color>
+    <color name="doctor_light">#E8F5E9</color>
+    <color name="lab_primary">#6A1B9A</color>
+    <color name="lab_color">#6A1B9A</color>
+    <color name="lab_light">#F3E5F5</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+
+    <!-- Night mode colors -->
+    <color name="background_dark">#121212</color>
+    <color name="surface_dark">#1E1E1E</color>
+</resources>

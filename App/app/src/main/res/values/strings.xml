@@ -1,0 +1,35 @@
+<resources>
+    <string name="app_name">Nithin Health</string>
+    <string name="login">Log In</string>
+    <string name="signup">Sign Up</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="confirm_password">Confirm Password</string>
+    <string name="username">Username</string>
+    <string name="full_name">Full Name</string>
+    <string name="role">Role</string>
+    <string name="dont_have_account">Don\'t have an account? Sign Up</string>
+    <string name="already_have_account">Already have an account? Log In</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="appointments">Appointments</string>
+    <string name="reports">Reports</string>
+    <string name="queries">Queries</string>
+    <string name="profile">Profile</string>
+    <string name="patients">Patients</string>
+    <string name="logout">Logout</string>
+    <string name="home">Home</string>
+    <string name="doctor_appointments">Doctor Appointments</string>
+    <string name="lab_appointments">Lab Appointments</string>
+    <string name="no_appointments">No appointments yet</string>
+    <string name="no_reports">No reports available</string>
+    <string name="no_queries">No queries yet</string>
+    <string name="no_patients">No patients linked yet</string>
+    <string name="create_appointment">Book Appointment</string>
+    <string name="upload_report">Upload Report</string>
+    <string name="send_query">Send Query</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="welcome_patient">Welcome, Patient</string>
+    <string name="welcome_doctor">Welcome, Doctor</string>
+    <string name="welcome_lab">Welcome, Lab</string>
+</resources>

@@ -5,22 +5,22 @@ from enum import Enum
 
 class UserRoleEnum(str, Enum):
     """User role enumeration for Pydantic"""
-    DOCTOR = "doctor"
-    PATIENT = "patient"
-    LAB = "lab"
+    DOCTOR = "DOCTOR"
+    PATIENT = "PATIENT"
+    LAB = "LAB"
 
 class QueryUrgencyEnum(str, Enum):
     """Query urgency enumeration for Pydantic"""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
 
 class AppointmentStatusEnum(str, Enum):
     """Appointment status enumeration for Pydantic"""
-    SCHEDULED = "scheduled"
-    CONFIRMED = "confirmed"
-    CANCELLED = "cancelled"
-    COMPLETED = "completed"
+    SCHEDULED = "SCHEDULED"
+    CONFIRMED = "CONFIRMED"
+    CANCELLED = "CANCELLED"
+    COMPLETED = "COMPLETED"
 
 # Signup/Registration Schemas
 class UserRegister(BaseModel):

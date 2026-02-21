@@ -1,0 +1,99 @@
+package com.nithin.healthapp.data.repository
+
+import android.content.Context
+import com.nithin.healthapp.data.api.RetrofitClient
+import com.nithin.healthapp.data.models.*
+
+class ProfileRepository(context: Context) {
+    private val api = RetrofitClient.getApiService(context)
+
+    suspend fun getMyProfile(): Result<PatientProfileResponse> {
+        return try {
+            val response = api.getMyProfile()
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to get profile"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateProfile(update: PatientProfileUpdate): Result<PatientProfileResponse> {
+        return try {
+            val response = api.updateMyProfile(update)
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception(response.errorBody()?.string() ?: "Failed to update"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun linkToDoctor(doctorCode: String): Result<PatientProfileResponse> {
+        return try {
+            val response = api.linkToDoctor(LinkDoctorRequest(doctorCode))
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception(response.errorBody()?.string() ?: "Failed to link"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun unlinkDoctor(): Result<MessageResponse> {
+        return try {
+            val response = api.unlinkFromDoctor()
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to unlink"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getLinkedDoctor(): Result<LinkedDoctorResponse> {
+        return try {
+            val response = api.getMyLinkedDoctor()
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("No linked doctor"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getDoctorCode(): Result<DoctorCodeResponse> {
+        return try {
+            val response = api.getMyDoctorCode()
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to get code"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun regenerateDoctorCode(): Result<DoctorCodeResponse> {
+        return try {
+            val response = api.regenerateDoctorCode()
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to regenerate"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getMyPatients(): Result<MyPatientsResponse> {
+        return try {
+            val response = api.getMyPatients()
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to get patients"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getPatientById(id: Int): Result<UserResponse> {
+        return try {
+            val response = api.getPatientById(id)
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Patient not found"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}

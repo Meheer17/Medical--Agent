@@ -7,22 +7,22 @@ import uuid
 
 class UserRole(str, enum.Enum):
     """User role enumeration"""
-    DOCTOR = "doctor"
-    PATIENT = "patient"
-    LAB = "lab"
+    DOCTOR = "DOCTOR"
+    PATIENT = "PATIENT"
+    LAB = "LAB"
 
 class AppointmentStatus(str, enum.Enum):
     """Appointment status enumeration"""
-    SCHEDULED = "scheduled"
-    CONFIRMED = "confirmed"
-    CANCELLED = "cancelled"
-    COMPLETED = "completed"
+    SCHEDULED = "SCHEDULED"
+    CONFIRMED = "CONFIRMED"
+    CANCELLED = "CANCELLED"
+    COMPLETED = "COMPLETED"
 
 class QueryUrgency(str, enum.Enum):
     """Query urgency levels"""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
 
 class User(Base):
     """User model for storing user information"""
