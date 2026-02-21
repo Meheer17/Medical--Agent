@@ -20,6 +20,7 @@ class QueryAdapter(
         val card: CardView = view.findViewById(R.id.card_query)
         val tvQuery: TextView = view.findViewById(R.id.tv_query_text)
         val tvResponse: TextView = view.findViewById(R.id.tv_response_text)
+        val cardResponse: View = view.findViewById(R.id.card_response)
         val tvUrgency: TextView = view.findViewById(R.id.tv_urgency)
         val tvStatus: TextView = view.findViewById(R.id.tv_status)
         val tvDate: TextView = view.findViewById(R.id.tv_date)
@@ -43,11 +44,13 @@ class QueryAdapter(
         if (query.isResponded) {
             holder.tvStatus.text = "✅ Responded"
             holder.tvStatus.setTextColor(android.graphics.Color.parseColor("#4CAF50"))
-            holder.tvResponse.text = "Response: ${query.responseText}"
+            holder.tvResponse.text = query.responseText ?: ""
+            holder.cardResponse.visibility = View.VISIBLE
             holder.tvResponse.visibility = View.VISIBLE
         } else {
             holder.tvStatus.text = if (isDoctor) "⏳ Awaiting your response" else "⏳ Awaiting response"
             holder.tvStatus.setTextColor(android.graphics.Color.parseColor("#FF9800"))
+            holder.cardResponse.visibility = View.GONE
             holder.tvResponse.visibility = View.GONE
         }
 

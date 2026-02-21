@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.nithin.healthapp.R
 import com.nithin.healthapp.databinding.FragmentDoctorPatientsBinding
 import com.nithin.healthapp.ui.common.PatientAdapter
 
@@ -38,7 +39,20 @@ class DoctorPatientsFragment : Fragment() {
                 } else {
                     binding.tvNoPatients.visibility = View.GONE
                     binding.rvPatients.visibility = View.VISIBLE
-                    binding.rvPatients.adapter = PatientAdapter(data.patients)
+                    binding.rvPatients.adapter = PatientAdapter(data.patients) { patient ->
+                        parentFragmentManager.beginTransaction()
+                            .replace(
+                                R.id.fragment_container,
+                                PatientDetailFragment.newInstance(
+                                    patient.id,
+                                    patient.fullName ?: patient.username,
+                                    patient.email,
+                                    patient.createdAt
+                                )
+                            )
+                            .addToBackStack("patient_detail")
+                            .commit()
+                    }
                 }
             }
             result.onFailure {

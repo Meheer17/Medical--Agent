@@ -75,27 +75,34 @@
         </ScrollView>
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab_create_doctor_appt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
-        android:layout_marginBottom="72dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="80dp"
         android:contentDescription="Book Doctor Appointment"
-        android:src="@android:drawable/ic_menu_add"
+        android:text="Doctor"
+        android:textAllCaps="false"
+        app:icon="@android:drawable/ic_menu_add"
         app:backgroundTint="@color/primary"
-        app:tint="@color/on_primary" />
+        app:iconTint="@color/on_primary"
+        android:textColor="@color/on_primary" />
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab_create_lab_appt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
         android:contentDescription="Book Lab Appointment"
-        android:src="@android:drawable/ic_menu_add"
+        android:text="Lab"
+        android:textAllCaps="false"
+        app:icon="@android:drawable/ic_menu_add"
         app:backgroundTint="@color/secondary"
-        app:tint="@color/on_secondary" />
+        app:iconTint="@color/on_secondary"
+        android:textColor="@color/on_secondary" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

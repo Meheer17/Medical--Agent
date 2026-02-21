@@ -270,6 +270,49 @@ async def upload_lab_report(
     return db_report
 
 
+@router.post(
+    "/reanalyze/{appointment_id}",
+    response_model=LabReportResponse,
+    summary="Re-analyze report",
+    description="Re-trigger AI analysis for a failed report"
+)
+async def reanalyze_report(
+    appointment_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Re-trigger AI analysis for a report that previously failed"""
+    report = db.query(LabReport).filter(
+        LabReport.appointment_id == appointment_id
+    ).first()
+    
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    
+    # Reset AI fields
+    report.ai_analysis_status = "pending"
+    report.ai_analysis_error = None
+    report.ai_summary = None
+    report.ai_key_findings = None
+    report.ai_abnormal_values = None
+    report.ai_clinical_significance = None
+    report.ai_doctor_recommendation = "Patient should visit their doctor for proper interpretation and guidance of these lab results."
+    db.commit()
+    db.refresh(report)
+    
+    # Queue background analysis
+    background_tasks.add_task(
+        process_pdf_and_generate_analysis,
+        report_id=report.id,
+        file_path=report.file_path,
+        db_session_factory=None
+    )
+    logger.info(f"✓ Re-analysis queued for report {report.id}")
+    
+    return report
+
+
 @router.get(
     "/lab/{appointment_id}",
     response_model=LabReportResponse,

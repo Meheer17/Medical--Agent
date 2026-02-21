@@ -75,8 +75,8 @@ class GenkitManager:
             genai.configure(api_key=self.config.api_key)
             
             # Initialize the model
-            self.model = GenerativeModel('gemini-1.5-flash')
-            logger.info("✓ Google AI initialized successfully with Genkit")
+            self.model = GenerativeModel('gemini-2.0-flash')
+            logger.info("✓ Google AI initialized successfully with gemini-2.0-flash")
         except ImportError as e:
             logger.error(f"Google AI library not installed: {e}")
             raise
@@ -154,9 +154,49 @@ Please provide a clear, professional analysis suitable for a patient to understa
         
         return prompt
     
+    async def generate_report_analysis_from_images(self, images: list, test_type: str = "lab") -> dict:
+        """
+        Generate comprehensive analysis of lab report from page images
+        
+        Args:
+            images: List of PIL Image objects (one per page)
+            test_type: Type of test (lab, pathology, etc.)
+        
+        Returns:
+            Dictionary with analysis results
+        """
+        if not self.model:
+            raise RuntimeError("LLM model not initialized")
+        
+        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report images and provide structured output.
+
+Provide analysis in this exact format (use | as delimiter):
+
+SUMMARY|Your concise summary here
+KEY_FINDINGS|Finding 1 | Finding 2 | Finding 3
+ABNORMAL_VALUES|Value 1 (abnormal) | Value 2 (abnormal)
+CLINICAL_SIGNIFICANCE|What these results indicate
+DOCTOR_RECOMMENDATION|Patient should visit their doctor to discuss these results and receive professional medical guidance
+
+Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation."""
+        
+        try:
+            # Build content list: prompt + all page images
+            content = [analysis_prompt] + images
+            response = self.model.generate_content(content)
+            analysis_text = response.text
+            
+            # Parse the response
+            result = self._parse_analysis_response(analysis_text)
+            logger.info("✓ Report analysis generated successfully from images")
+            return result
+        except Exception as e:
+            logger.error(f"Error generating report analysis from images: {e}")
+            raise
+
     async def generate_report_analysis(self, pdf_text: str, test_type: str = "lab") -> dict:
         """
-        Generate comprehensive analysis of lab report
+        Generate comprehensive analysis of lab report from text (fallback)
         
         Args:
             pdf_text: Extracted text from PDF

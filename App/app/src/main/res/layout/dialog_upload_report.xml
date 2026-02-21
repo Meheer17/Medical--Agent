@@ -5,35 +5,18 @@
     android:orientation="vertical"
     android:padding="24dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:text="Upload Lab Report"
-        android:textColor="@color/text_primary"
-        android:textSize="18sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:text="Upload a PDF report for a lab appointment"
-        android:textColor="@color/text_secondary"
-        android:textSize="14sp" />
-
     <com.google.android.material.textfield.TextInputLayout
-        style="@style/TextInputStyle"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="12dp"
-        android:hint="Appointment ID">
+        android:hint="Select Completed Appointment">
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/et_appointment_id"
+        <AutoCompleteTextView
+            android:id="@+id/actv_appointment"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="number" />
+            android:inputType="none" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.textfield.TextInputLayout
@@ -68,7 +51,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_select_file"
-        style="@style/OutlinedButton"
+        style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:text="Select PDF File" />
@@ -78,7 +61,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
+        android:text="No file selected"
         android:textColor="@color/text_secondary"
         android:textSize="13sp"
-        android:visibility="gone" />
+        android:visibility="visible" />
 </LinearLayout>

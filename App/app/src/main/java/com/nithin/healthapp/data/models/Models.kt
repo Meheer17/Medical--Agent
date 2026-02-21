@@ -212,3 +212,13 @@ data class ProfileResponse(
     val role: String,
     val profile: Map<String, Any?>
 )
+
+// ========== Simple User Listing (doctors/labs) ==========
+
+data class SimpleUserItem(
+    val id: Int,
+    val name: String,
+    val email: String,
+    val username: String,
+    val phone: String?
+)

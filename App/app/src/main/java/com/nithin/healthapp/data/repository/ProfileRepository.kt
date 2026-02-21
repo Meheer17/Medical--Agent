@@ -96,4 +96,54 @@ class ProfileRepository(context: Context) {
             Result.failure(e)
         }
     }
+
+    suspend fun listAllDoctors(): Result<List<SimpleUserItem>> {
+        return try {
+            val response = api.listAllDoctors()
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to list doctors"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun listAllLabs(): Result<List<SimpleUserItem>> {
+        return try {
+            val response = api.listAllLabs()
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to list labs"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getPatientReports(patientId: Int): Result<List<LabReportResponse>> {
+        return try {
+            val response = api.getPatientReports(patientId)
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to get patient reports"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getPatientDoctorAppointments(patientId: Int): Result<List<DoctorAppointmentResponse>> {
+        return try {
+            val response = api.getPatientDoctorAppointments(patientId)
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to get patient appointments"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getPatientLabAppointments(patientId: Int): Result<List<LabAppointmentResponse>> {
+        return try {
+            val response = api.getPatientLabAppointments(patientId)
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to get patient lab appointments"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

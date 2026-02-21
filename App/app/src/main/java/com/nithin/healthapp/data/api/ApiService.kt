@@ -3,6 +3,7 @@ package com.nithin.healthapp.data.api
 import com.nithin.healthapp.data.models.*
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -52,6 +53,21 @@ interface ApiService {
 
     @GET("api/profiles/my-linked-doctor")
     suspend fun getMyLinkedDoctor(): Response<LinkedDoctorResponse>
+
+    @GET("api/profiles/doctors")
+    suspend fun listAllDoctors(): Response<List<SimpleUserItem>>
+
+    @GET("api/profiles/labs")
+    suspend fun listAllLabs(): Response<List<SimpleUserItem>>
+
+    @GET("api/profiles/patient/{patient_id}/reports")
+    suspend fun getPatientReports(@Path("patient_id") patientId: Int): Response<List<LabReportResponse>>
+
+    @GET("api/profiles/patient/{patient_id}/doctor-appointments")
+    suspend fun getPatientDoctorAppointments(@Path("patient_id") patientId: Int): Response<List<DoctorAppointmentResponse>>
+
+    @GET("api/profiles/patient/{patient_id}/lab-appointments")
+    suspend fun getPatientLabAppointments(@Path("patient_id") patientId: Int): Response<List<LabAppointmentResponse>>
 
     // ==================== DOCTOR APPOINTMENTS ====================
 
@@ -112,6 +128,10 @@ interface ApiService {
 
     @DELETE("api/reports/lab/{appointment_id}")
     suspend fun deleteLabReport(@Path("appointment_id") appointmentId: Int): Response<Unit>
+
+    @GET("api/reports/download/{appointment_id}")
+    @Streaming
+    suspend fun downloadReportFile(@Path("appointment_id") appointmentId: Int): Response<ResponseBody>
 
     // ==================== QUERIES ====================
 

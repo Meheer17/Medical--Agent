@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.nithin.healthapp.data.models.*
 import com.nithin.healthapp.data.repository.*
 import kotlinx.coroutines.launch
+import java.io.File
 
 class PatientViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -55,6 +56,14 @@ class PatientViewModel(application: Application) : AndroidViewModel(application)
     // Query create
     private val _queryCreate = MutableLiveData<Result<QueryResponse>>()
     val queryCreate: LiveData<Result<QueryResponse>> = _queryCreate
+
+    // Available doctors list
+    private val _doctors = MutableLiveData<Result<List<SimpleUserItem>>>()
+    val doctors: LiveData<Result<List<SimpleUserItem>>> = _doctors
+
+    // Available labs list
+    private val _labs = MutableLiveData<Result<List<SimpleUserItem>>>()
+    val labs: LiveData<Result<List<SimpleUserItem>>> = _labs
 
     private val _isLoading = MutableLiveData(false)
     val isLoading: LiveData<Boolean> = _isLoading
@@ -159,6 +168,33 @@ class PatientViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isLoading.value = true
             _queryCreate.value = queryRepo.createQuery(text, urgency)
+            _isLoading.value = false
+        }
+    }
+
+    fun loadDoctors() {
+        viewModelScope.launch {
+            _doctors.value = profileRepo.listAllDoctors()
+        }
+    }
+
+    fun loadLabs() {
+        viewModelScope.launch {
+            _labs.value = profileRepo.listAllLabs()
+        }
+    }
+
+    // Download report
+    private val _downloadedFile = MutableLiveData<Result<File>>()
+    val downloadedFile: LiveData<Result<File>> = _downloadedFile
+
+    fun downloadReport(appointmentId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _downloadedFile.value = reportRepo.downloadReportFile(
+                appointmentId,
+                getApplication<Application>().cacheDir
+            )
             _isLoading.value = false
         }
     }

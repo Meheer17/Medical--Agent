@@ -72,4 +72,19 @@ class LabViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = false
         }
     }
+
+    // Download report
+    private val _downloadedFile = MutableLiveData<Result<File>>()
+    val downloadedFile: LiveData<Result<File>> = _downloadedFile
+
+    fun downloadReport(appointmentId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _downloadedFile.value = reportRepo.downloadReportFile(
+                appointmentId,
+                getApplication<Application>().cacheDir
+            )
+            _isLoading.value = false
+        }
+    }
 }

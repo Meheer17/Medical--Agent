@@ -13,7 +13,8 @@ import com.nithin.healthapp.util.DateUtils
 class ReportAdapter(
     private val reports: List<LabReportResponse>,
     private val showDelete: Boolean = false,
-    private val onItemClick: ((LabReportResponse) -> Unit)? = null
+    private val onItemClick: ((LabReportResponse) -> Unit)? = null,
+    private val onDownloadClick: ((LabReportResponse) -> Unit)? = null
 ) : RecyclerView.Adapter<ReportAdapter.ViewHolder>() {
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -24,6 +25,7 @@ class ReportAdapter(
         val tvSummary: TextView = view.findViewById(R.id.tv_summary)
         val tvDate: TextView = view.findViewById(R.id.tv_date)
         val tvFileSize: TextView = view.findViewById(R.id.tv_file_size)
+        val btnViewPdf: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btn_view_pdf)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -67,6 +69,15 @@ class ReportAdapter(
 
         holder.card.setOnClickListener {
             onItemClick?.invoke(report)
+        }
+
+        if (onDownloadClick != null) {
+            holder.btnViewPdf.visibility = View.VISIBLE
+            holder.btnViewPdf.setOnClickListener {
+                onDownloadClick.invoke(report)
+            }
+        } else {
+            holder.btnViewPdf.visibility = View.GONE
         }
     }
 

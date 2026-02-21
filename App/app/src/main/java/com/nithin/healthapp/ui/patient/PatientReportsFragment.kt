@@ -1,10 +1,12 @@
 package com.nithin.healthapp.ui.patient
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -40,15 +42,39 @@ class PatientReportsFragment : Fragment() {
                 } else {
                     binding.tvNoReports.visibility = View.GONE
                     binding.rvReports.visibility = View.VISIBLE
-                    binding.rvReports.adapter = ReportAdapter(reports) { report ->
-                        showReportDetail(report)
-                    }
+                    binding.rvReports.adapter = ReportAdapter(
+                        reports,
+                        onItemClick = { report -> showReportDetail(report) },
+                        onDownloadClick = { report -> viewModel.downloadReport(report.appointmentId) }
+                    )
                 }
             }
             result.onFailure {
                 binding.tvNoReports.visibility = View.VISIBLE
                 binding.rvReports.visibility = View.GONE
                 Toast.makeText(requireContext(), "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        viewModel.downloadedFile.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { file ->
+                val uri = FileProvider.getUriForFile(
+                    requireContext(),
+                    "${requireContext().packageName}.fileprovider",
+                    file
+                )
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/pdf")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try {
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(requireContext(), "No PDF viewer found", Toast.LENGTH_SHORT).show()
+                }
+            }
+            result.onFailure {
+                Toast.makeText(requireContext(), "Download failed: ${it.message}", Toast.LENGTH_SHORT).show()
             }
         }
 

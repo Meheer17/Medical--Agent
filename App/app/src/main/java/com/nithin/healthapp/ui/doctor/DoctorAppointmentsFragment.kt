@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -15,6 +17,8 @@ import com.google.android.material.textfield.TextInputEditText
 import com.nithin.healthapp.R
 import com.nithin.healthapp.data.models.DoctorAppointmentUpdate
 import com.nithin.healthapp.data.models.DoctorCreateLabAppointment
+import com.nithin.healthapp.data.models.SimpleUserItem
+import com.nithin.healthapp.data.models.UserResponse
 import com.nithin.healthapp.databinding.FragmentDoctorAppointmentsBinding
 import com.nithin.healthapp.ui.common.AppointmentAdapter
 import com.nithin.healthapp.util.DateUtils
@@ -25,6 +29,9 @@ class DoctorAppointmentsFragment : Fragment() {
     private var _binding: FragmentDoctorAppointmentsBinding? = null
     private val binding get() = _binding!!
     private val viewModel: DoctorViewModel by activityViewModels()
+
+    private var cachedPatients: List<UserResponse> = emptyList()
+    private var cachedLabs: List<SimpleUserItem> = emptyList()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentDoctorAppointmentsBinding.inflate(inflater, container, false)
@@ -47,6 +54,8 @@ class DoctorAppointmentsFragment : Fragment() {
         observeData()
         viewModel.loadDoctorAppointments()
         viewModel.loadLabAppointments()
+        viewModel.loadPatients()
+        viewModel.loadLabs()
     }
 
     private fun observeData() {
@@ -112,6 +121,18 @@ class DoctorAppointmentsFragment : Fragment() {
                 Toast.makeText(requireContext(), "Error: ${it.message}", Toast.LENGTH_SHORT).show()
             }
         }
+
+        viewModel.patients.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { data ->
+                cachedPatients = data.patients
+            }
+        }
+
+        viewModel.labs.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { labs ->
+                cachedLabs = labs
+            }
+        }
     }
 
     private fun showUpdateDialog(item: AppointmentAdapter.AppointmentItem) {
@@ -127,13 +148,47 @@ class DoctorAppointmentsFragment : Fragment() {
 
     private fun showCreateLabAppointmentDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_doctor_create_lab_appt, null)
-        val etPatientId = dialogView.findViewById<TextInputEditText>(R.id.et_patient_id)
-        val etLabId = dialogView.findViewById<TextInputEditText>(R.id.et_lab_id)
+        val actvPatient = dialogView.findViewById<AutoCompleteTextView>(R.id.actv_patient)
+        val actvLab = dialogView.findViewById<AutoCompleteTextView>(R.id.actv_lab)
         val etDate = dialogView.findViewById<TextInputEditText>(R.id.et_date)
-        val etTestType = dialogView.findViewById<TextInputEditText>(R.id.et_test_type)
+        val actvTestType = dialogView.findViewById<AutoCompleteTextView>(R.id.actv_test_type)
         val etReason = dialogView.findViewById<TextInputEditText>(R.id.et_reason)
 
+        var selectedPatientId: Int? = null
+        var selectedLabId: Int? = null
         var selectedDate = ""
+
+        // Populate patient dropdown
+        val patientNames = cachedPatients.map { it.fullName ?: it.username }
+        val patientAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, patientNames)
+        actvPatient.setAdapter(patientAdapter)
+        actvPatient.setOnItemClickListener { _, _, position, _ ->
+            selectedPatientId = cachedPatients[position].id
+        }
+
+        // Populate lab dropdown
+        val labNames = cachedLabs.map { it.name }
+        val labAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, labNames)
+        actvLab.setAdapter(labAdapter)
+        actvLab.setOnItemClickListener { _, _, position, _ ->
+            selectedLabId = cachedLabs[position].id
+        }
+
+        // Test type dropdown
+        val testTypes = listOf(
+            "Complete Blood Count (CBC)",
+            "Comprehensive Metabolic Panel (CMP)",
+            "Urinalysis Report",
+            "Lipid Profile",
+            "Thyroid Function Test (Panel)"
+        )
+        val testTypeAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, testTypes)
+        actvTestType.setAdapter(testTypeAdapter)
+        var selectedTestType: String? = null
+        actvTestType.setOnItemClickListener { _, _, position, _ ->
+            selectedTestType = testTypes[position]
+        }
+
         etDate.setOnClickListener {
             val cal = Calendar.getInstance()
             DatePickerDialog(requireContext(), { _, y, m, d ->
@@ -148,15 +203,13 @@ class DoctorAppointmentsFragment : Fragment() {
             .setTitle("Create Lab Appointment for Patient")
             .setView(dialogView)
             .setPositiveButton("Create") { _, _ ->
-                val patientId = etPatientId.text.toString().toIntOrNull()
-                val labId = etLabId.text.toString().toIntOrNull()
-                val testType = etTestType.text?.toString()
-                if (patientId == null || labId == null || selectedDate.isEmpty() || testType.isNullOrEmpty()) {
+                val testType = selectedTestType
+                if (selectedPatientId == null || selectedLabId == null || selectedDate.isEmpty() || testType.isNullOrEmpty()) {
                     Toast.makeText(requireContext(), "Fill all required fields", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 viewModel.createLabAppointmentForPatient(
-                    DoctorCreateLabAppointment(patientId, labId, selectedDate, testType, etReason.text?.toString())
+                    DoctorCreateLabAppointment(selectedPatientId!!, selectedLabId!!, selectedDate, testType, etReason.text?.toString())
                 )
             }
             .setNegativeButton("Cancel", null)

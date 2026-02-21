@@ -1,8 +1,9 @@
 """
 PDF processing module for extracting text and generating AI-powered summaries
+Uses PDF-to-image conversion with Gemini vision as primary analysis method
 """
 import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from pathlib import Path
 import asyncio
 
@@ -11,13 +12,67 @@ logger = logging.getLogger(__name__)
 
 class PDFProcessor:
     """
-    Handles PDF processing including text extraction and AI analysis
+    Handles PDF processing including text extraction and page-to-image conversion
     """
+    
+    @staticmethod
+    def convert_pdf_to_images(file_path: str, max_pages: int = 10) -> List:
+        """
+        Convert PDF pages to PIL Images using PyMuPDF
+        
+        Args:
+            file_path: Path to PDF file
+            max_pages: Maximum number of pages to convert (default 10)
+        
+        Returns:
+            List of PIL Image objects (one per page)
+        """
+        try:
+            import fitz  # PyMuPDF
+            from PIL import Image
+            import io
+            
+            if not Path(file_path).exists():
+                raise FileNotFoundError(f"PDF file not found: {file_path}")
+            
+            doc = fitz.open(file_path)
+            images = []
+            total_pages = len(doc)
+            pages_to_convert = min(total_pages, max_pages)
+            
+            # Use lower DPI for large documents to keep payload manageable
+            dpi = 150 if total_pages > 5 else 200
+            
+            for page_num in range(pages_to_convert):
+                page = doc.load_page(page_num)
+                pix = page.get_pixmap(dpi=dpi)
+                img_data = pix.tobytes("png")
+                img = Image.open(io.BytesIO(img_data))
+                images.append(img)
+                logger.info(f"Converted page {page_num + 1}/{pages_to_convert} to image ({dpi} DPI)")
+            
+            if total_pages > max_pages:
+                logger.warning(f"PDF has {total_pages} pages, only converting first {max_pages}")
+            
+            doc.close()
+            
+            if not images:
+                raise ValueError("No pages could be converted from the PDF")
+            
+            logger.info(f"✓ Converted {len(images)} PDF pages to images")
+            return images
+        
+        except ImportError:
+            logger.error("PyMuPDF (fitz) library not installed. Install with: pip install PyMuPDF")
+            raise
+        except Exception as e:
+            logger.error(f"Error converting PDF to images: {e}")
+            raise ValueError(f"Failed to convert PDF to images: {str(e)}")
     
     @staticmethod
     def extract_text_from_pdf(file_path: str) -> str:
         """
-        Extract text from PDF file
+        Extract text from PDF file (fallback method)
         
         Args:
             file_path: Path to PDF file
@@ -129,16 +184,18 @@ class AIReportAnalyzer:
     
     async def analyze_report(
         self,
-        pdf_text: str,
+        pdf_text: str = None,
+        images: list = None,
         test_type: str = "laboratory",
         patient_name: Optional[str] = None
     ) -> Dict:
         """
-        Analyze lab report using AI and generate summary with doctor recommendation
+        Analyze lab report using AI. Prefers image-based analysis, falls back to text.
         
         Args:
-            pdf_text: Extracted text from PDF
-            test_type: Type of medical test (laboratory, pathology, etc.)
+            pdf_text: Extracted text from PDF (fallback)
+            images: List of PIL Image objects from PDF pages (preferred)
+            test_type: Type of medical test
             patient_name: Optional patient name for context
         
         Returns:
@@ -147,18 +204,28 @@ class AIReportAnalyzer:
         if not self.genkit:
             raise RuntimeError("AI analyzer not initialized")
         
-        # Truncate very long texts to avoid token limits
-        max_chars = 8000
-        if len(pdf_text) > max_chars:
-            logger.warning(f"PDF text truncated from {len(pdf_text)} to {max_chars} characters")
-            pdf_text = pdf_text[:max_chars] + "\n[... Text truncated for processing ...]"
-        
         try:
-            # Generate analysis using Genkit
-            analysis = await self.genkit.generate_report_analysis(
-                pdf_text=pdf_text,
-                test_type=test_type
-            )
+            if images:
+                # Primary: Use image-based analysis with Gemini vision
+                logger.info(f"Using image-based analysis with {len(images)} page(s)")
+                analysis = await self.genkit.generate_report_analysis_from_images(
+                    images=images,
+                    test_type=test_type
+                )
+            elif pdf_text:
+                # Fallback: Use text-based analysis
+                logger.info("Using text-based analysis (fallback)")
+                max_chars = 8000
+                if len(pdf_text) > max_chars:
+                    logger.warning(f"PDF text truncated from {len(pdf_text)} to {max_chars} characters")
+                    pdf_text = pdf_text[:max_chars] + "\n[... Text truncated for processing ...]"
+                
+                analysis = await self.genkit.generate_report_analysis(
+                    pdf_text=pdf_text,
+                    test_type=test_type
+                )
+            else:
+                raise ValueError("Either images or pdf_text must be provided")
             
             # Ensure doctor recommendation is present
             if not analysis.get("doctor_recommendation"):
@@ -216,7 +283,8 @@ class ReportProcessor:
         patient_name: Optional[str] = None
     ) -> Dict:
         """
-        Complete pipeline: Extract PDF text and generate AI analysis
+        Complete pipeline: Convert PDF to images and generate AI analysis.
+        Falls back to text extraction if image conversion fails.
         
         Args:
             file_path: Path to saved PDF file
@@ -227,21 +295,32 @@ class ReportProcessor:
             Complete analysis result
         """
         try:
-            # Extract text from PDF
-            pdf_text = self.pdf_processor.extract_text_from_pdf(file_path)
+            # Primary: Convert PDF pages to images for vision analysis
+            images = None
+            pdf_text = None
+            try:
+                images = self.pdf_processor.convert_pdf_to_images(file_path)
+                logger.info(f"Converted PDF to {len(images)} images for vision analysis")
+            except Exception as img_err:
+                logger.warning(f"Image conversion failed, falling back to text extraction: {img_err}")
+                # Fallback: Extract text
+                pdf_text = self.pdf_processor.extract_text_from_pdf(file_path)
             
             # Analyze with AI
             analysis = await self.ai_analyzer.analyze_report(
                 pdf_text=pdf_text,
+                images=images,
                 test_type=test_type,
                 patient_name=patient_name
             )
             
+            pages = len(images) if images else (pdf_text.count("--- Page") if pdf_text else 0)
+            
             return {
                 "status": "success",
                 "analysis": analysis,
-                "pdf_text_length": len(pdf_text),
-                "pages_processed": pdf_text.count("--- Page")
+                "method": "vision" if images else "text",
+                "pages_processed": pages
             }
         
         except Exception as e:

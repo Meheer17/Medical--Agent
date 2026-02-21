@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.nithin.healthapp.data.models.*
 import com.nithin.healthapp.data.repository.*
 import kotlinx.coroutines.launch
+import java.io.File
 
 class DoctorViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -48,6 +49,23 @@ class DoctorViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _isLoading = MutableLiveData(false)
     val isLoading: LiveData<Boolean> = _isLoading
+
+    // Available labs list
+    private val _labs = MutableLiveData<Result<List<SimpleUserItem>>>()
+    val labs: LiveData<Result<List<SimpleUserItem>>> = _labs
+
+    // Patient detail data
+    private val _patientReports = MutableLiveData<Result<List<LabReportResponse>>>()
+    val patientReports: LiveData<Result<List<LabReportResponse>>> = _patientReports
+
+    private val _patientDoctorAppointments = MutableLiveData<Result<List<DoctorAppointmentResponse>>>()
+    val patientDoctorAppointments: LiveData<Result<List<DoctorAppointmentResponse>>> = _patientDoctorAppointments
+
+    private val _patientLabAppointments = MutableLiveData<Result<List<LabAppointmentResponse>>>()
+    val patientLabAppointments: LiveData<Result<List<LabAppointmentResponse>>> = _patientLabAppointments
+
+    private val _downloadedFile = MutableLiveData<Result<File>>()
+    val downloadedFile: LiveData<Result<File>> = _downloadedFile
 
     fun loadDoctorAppointments() {
         viewModelScope.launch {
@@ -125,6 +143,41 @@ class DoctorViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _isLoading.value = true
             _createLabAppt.value = appointmentRepo.doctorCreateLabAppointment(appointment)
+            _isLoading.value = false
+        }
+    }
+
+    fun loadLabs() {
+        viewModelScope.launch {
+            _labs.value = profileRepo.listAllLabs()
+        }
+    }
+
+    fun loadPatientReports(patientId: Int) {
+        viewModelScope.launch {
+            _patientReports.value = profileRepo.getPatientReports(patientId)
+        }
+    }
+
+    fun loadPatientDoctorAppointments(patientId: Int) {
+        viewModelScope.launch {
+            _patientDoctorAppointments.value = profileRepo.getPatientDoctorAppointments(patientId)
+        }
+    }
+
+    fun loadPatientLabAppointments(patientId: Int) {
+        viewModelScope.launch {
+            _patientLabAppointments.value = profileRepo.getPatientLabAppointments(patientId)
+        }
+    }
+
+    fun downloadReport(appointmentId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _downloadedFile.value = reportRepo.downloadReportFile(
+                appointmentId,
+                getApplication<Application>().cacheDir
+            )
             _isLoading.value = false
         }
     }

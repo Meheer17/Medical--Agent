@@ -61,4 +61,24 @@ class ReportRepository(context: Context) {
             Result.failure(e)
         }
     }
+
+    suspend fun downloadReportFile(appointmentId: Int, cacheDir: File): Result<File> {
+        return try {
+            val response = api.downloadReportFile(appointmentId)
+            if (response.isSuccessful) {
+                val body = response.body() ?: return Result.failure(Exception("Empty response"))
+                val file = File(cacheDir, "report_${appointmentId}.pdf")
+                file.outputStream().use { output ->
+                    body.byteStream().use { input ->
+                        input.copyTo(output)
+                    }
+                }
+                Result.success(file)
+            } else {
+                Result.failure(Exception("Failed to download report"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
