@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS lab_reports (
     ai_key_findings LONGTEXT NULL COMMENT 'JSON array of key findings from report',
     ai_abnormal_values LONGTEXT NULL COMMENT 'JSON array of abnormal/out-of-range values',
     ai_clinical_significance LONGTEXT NULL COMMENT 'AI interpretation of clinical significance',
+    ai_criticality VARCHAR(50) DEFAULT 'low' NULL COMMENT 'AI-assessed criticality: critical, medium, low',
     ai_doctor_recommendation LONGTEXT NULL COMMENT 'Recommendations including mandatory doctor visit reminder',
     ai_analysis_status ENUM('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED') DEFAULT 'PENDING' NOT NULL COMMENT 'Status of AI analysis',
     ai_analysis_error TEXT NULL COMMENT 'Error message if analysis failed',

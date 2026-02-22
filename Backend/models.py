@@ -118,6 +118,7 @@ class LabReport(Base):
     ai_key_findings = Column(Text, nullable=True)  # JSON array of key findings
     ai_abnormal_values = Column(Text, nullable=True)  # JSON array of abnormal values
     ai_clinical_significance = Column(Text, nullable=True)  # AI interpretation
+    ai_criticality = Column(String(50), default="low", nullable=True)  # critical, medium, low
     ai_doctor_recommendation = Column(Text, nullable=True)  # Always includes recommendation to visit doctor
     ai_analysis_status = Column(String(50), default="pending", nullable=False)  # pending, completed, failed
     ai_analysis_error = Column(Text, nullable=True)  # Error message if analysis failed

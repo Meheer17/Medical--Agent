@@ -64,6 +64,12 @@ async def process_pdf_and_generate_analysis(report_id: int, file_path: str, db_s
                     
                     report.ai_clinical_significance = analysis.get("clinical_significance", "")
                     
+                    # Store criticality assessment from AI
+                    criticality = analysis.get("criticality", "low")
+                    if criticality not in ("critical", "medium", "low"):
+                        criticality = "low"
+                    report.ai_criticality = criticality
+                    
                     # Ensure doctor recommendation always includes visit recommendation
                     recommendation = analysis.get("doctor_recommendation", "")
                     if recommendation and "doctor" not in recommendation.lower():
@@ -234,6 +240,7 @@ async def upload_lab_report(
         ai_key_findings=None,
         ai_abnormal_values=None,
         ai_clinical_significance=None,
+        ai_criticality=None,
         ai_doctor_recommendation="Patient should visit their doctor for proper interpretation and guidance of these lab results.",
         ai_analysis_status="pending",
         ai_analysis_error=None
@@ -297,6 +304,7 @@ async def reanalyze_report(
     report.ai_key_findings = None
     report.ai_abnormal_values = None
     report.ai_clinical_significance = None
+    report.ai_criticality = None
     report.ai_doctor_recommendation = "Patient should visit their doctor for proper interpretation and guidance of these lab results."
     db.commit()
     db.refresh(report)

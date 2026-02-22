@@ -156,19 +156,20 @@ Please provide a clear, professional analysis suitable for a patient to understa
     
     async def generate_report_analysis_from_images(self, images: list, test_type: str = "lab") -> dict:
         """
-        Generate comprehensive analysis of lab report from page images
+        Generate comprehensive analysis of lab report from page images.
+        Returns all analysis data including criticality in a single AI call.
         
         Args:
             images: List of PIL Image objects (one per page)
             test_type: Type of test (lab, pathology, etc.)
         
         Returns:
-            Dictionary with analysis results
+            Dictionary with analysis results including criticality
         """
         if not self.model:
             raise RuntimeError("LLM model not initialized")
         
-        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report images and provide structured output.
+        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report images and provide ALL of the following structured output in a SINGLE response.
 
 Provide analysis in this exact format (use | as delimiter):
 
@@ -176,9 +177,16 @@ SUMMARY|Your concise summary here
 KEY_FINDINGS|Finding 1 | Finding 2 | Finding 3
 ABNORMAL_VALUES|Value 1 (abnormal) | Value 2 (abnormal)
 CLINICAL_SIGNIFICANCE|What these results indicate
+CRITICALITY|critical OR medium OR low
 DOCTOR_RECOMMENDATION|Patient should visit their doctor to discuss these results and receive professional medical guidance
 
-Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation."""
+For CRITICALITY, assess the overall urgency of the results:
+- "critical" = Life-threatening or severely abnormal values requiring immediate medical attention
+- "medium" = Moderately abnormal values that need medical follow-up soon
+- "low" = Normal or mildly abnormal values with no immediate concern
+
+Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation.
+Return ALL fields above in a SINGLE response."""
         
         try:
             # Build content list: prompt + all page images
@@ -208,7 +216,7 @@ Remember to ALWAYS recommend that the patient visits a doctor for proper interpr
         if not self.model:
             raise RuntimeError("LLM model not initialized")
         
-        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report and provide structured output.
+        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report and provide ALL of the following structured output in a SINGLE response.
 
 LAB REPORT TEXT:
 {pdf_text}
@@ -219,9 +227,16 @@ SUMMARY|Your concise summary here
 KEY_FINDINGS|Finding 1 | Finding 2 | Finding 3
 ABNORMAL_VALUES|Value 1 (abnormal) | Value 2 (abnormal)
 CLINICAL_SIGNIFICANCE|What these results indicate
+CRITICALITY|critical OR medium OR low
 DOCTOR_RECOMMENDATION|Patient should visit their doctor to discuss these results and receive professional medical guidance
 
-Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation."""
+For CRITICALITY, assess the overall urgency of the results:
+- "critical" = Life-threatening or severely abnormal values requiring immediate medical attention
+- "medium" = Moderately abnormal values that need medical follow-up soon
+- "low" = Normal or mildly abnormal values with no immediate concern
+
+Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation.
+Return ALL fields above in a SINGLE response."""
         
         try:
             response = self.model.generate_content(analysis_prompt)
@@ -250,6 +265,7 @@ Remember to ALWAYS recommend that the patient visits a doctor for proper interpr
             "key_findings": [],
             "abnormal_values": [],
             "clinical_significance": "",
+            "criticality": "low",
             "doctor_recommendation": "Patient should visit their doctor for proper interpretation and guidance of these lab results."
         }
         
@@ -269,6 +285,13 @@ Remember to ALWAYS recommend that the patient visits a doctor for proper interpr
                         analysis["abnormal_values"] = [v.strip() for v in value.split('|') if v.strip()]
                     elif key == "clinical_significance":
                         analysis["clinical_significance"] = value
+                    elif key == "criticality":
+                        criticality_val = value.strip().lower()
+                        if criticality_val in ("critical", "medium", "low"):
+                            analysis["criticality"] = criticality_val
+                        else:
+                            logger.warning(f"Unknown criticality value: {criticality_val}, defaulting to 'low'")
+                            analysis["criticality"] = "low"
                     elif key == "doctor_recommendation":
                         analysis["doctor_recommendation"] = value if value else analysis["doctor_recommendation"]
         except Exception as e:
