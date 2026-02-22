@@ -1,11 +1,11 @@
 -- Create database
-CREATE DATABASE IF NOT EXISTS nithin_db;
+CREATE DATABASE IF NOT EXISTS cliniq_db;
 
 -- Create user 'mahi' with all privileges
 CREATE USER IF NOT EXISTS 'mahi'@'localhost' IDENTIFIED BY 'mahi@123';
 
--- Grant all privileges on nithin_db
-GRANT ALL PRIVILEGES ON nithin_db.* TO 'mahi'@'localhost';
+-- Grant all privileges on cliniq_db
+GRANT ALL PRIVILEGES ON cliniq_db.* TO 'mahi'@'localhost';
 
 -- Grant global privileges
 GRANT ALL PRIVILEGES ON *.* TO 'mahi'@'localhost' WITH GRANT OPTION;
@@ -20,7 +20,7 @@ SELECT User, Host FROM mysql.user WHERE User='mahi';
 SHOW DATABASES;
 
 -- Use the database
-USE nithin_db;
+USE cliniq_db;
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (

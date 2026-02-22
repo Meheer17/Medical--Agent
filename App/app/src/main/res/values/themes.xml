@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Base Theme -->
-    <style name="Theme.NithinHealth" parent="Theme.Material3.Light.NoActionBar">
+    <style name="Theme.ClinIQ" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorSecondary">@color/secondary</item>
@@ -19,7 +19,7 @@
     </style>
 
     <!-- Auth Theme (no action bar, full screen feel) -->
-    <style name="Theme.NithinHealth.Auth" parent="Theme.NithinHealth">
+    <style name="Theme.ClinIQ.Auth" parent="Theme.ClinIQ"
         <item name="android:statusBarColor">@color/primary</item>
     </style>
 

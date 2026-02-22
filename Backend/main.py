@@ -20,7 +20,7 @@ init_db()
 
 # Create FastAPI app
 app = FastAPI(
-    title="Nithin App API",
+    title="ClinIQ API",
     description="FastAPI backend with JWT authentication and MySQL database",
     version="1.0.0",
 )
@@ -124,7 +124,7 @@ async def download_file(
 async def root():
     """Root endpoint"""
     return {
-        "message": "Welcome to Nithin App API",
+        "message": "Welcome to ClinIQ API",
         "docs": "/docs",
         "health": "/health"
     }

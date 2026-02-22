@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """Application configuration from environment variables"""
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "mysql+mysql-connector-python://root:password@localhost:3306/nithin_db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "mysql+mysql-connector-python://root:password@localhost:3306/cliniq_db")
     
     # JWT
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")

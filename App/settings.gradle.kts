@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NithinHealthApp"
+rootProject.name = "ClinIQApp"
 include(":app")

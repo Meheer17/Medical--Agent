@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.nithin.healthapp"
+    namespace = "com.simats.cliniq"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.nithin.healthapp"
+        applicationId = "com.simats.cliniq"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

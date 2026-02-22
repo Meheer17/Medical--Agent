@@ -7,7 +7,7 @@
 -keepattributes Exceptions
 -keepattributes *Annotation*
 
--keep class com.nithin.healthapp.data.models.** { *; }
+-keep class com.simats.cliniq.data.models.** { *; }
 
 # Retrofit
 -dontwarn retrofit2.**

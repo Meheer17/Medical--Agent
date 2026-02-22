@@ -1,7 +1,7 @@
 {
     "info": {
-        "_postman_id": "nithin-app-api",
-        "name": "Nithin App API",
+        "_postman_id": "cliniq-app-api",
+        "name": "ClinIQ API",
         "description": "FastAPI backend with JWT authentication and MySQL database",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },

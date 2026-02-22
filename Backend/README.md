@@ -1,4 +1,4 @@
-# Nithin App - FastAPI Backend
+# ClinIQ - FastAPI Backend
 
 A FastAPI backend application with user authentication, JWT tokens, and MySQL database integration.
 
@@ -55,7 +55,7 @@ cp .env.example .env
 
 Edit `.env`:
 ```
-DATABASE_URL=mysql+mysql-connector-python://root:your_password@localhost:3306/nithin_db
+DATABASE_URL=mysql+mysql-connector-python://root:your_password@localhost:3306/cliniq_db
 SECRET_KEY=your-super-secret-key-change-this
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -68,7 +68,7 @@ PORT=8000
 
 ```bash
 mysql -u root -p
-CREATE DATABASE nithin_db;
+CREATE DATABASE cliniq_db;
 ```
 
 ### 5. Run the Application
