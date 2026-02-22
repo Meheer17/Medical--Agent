@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 import json
 import logging
 import os
+from datetime import datetime
 
 from database import get_db
-from models import User, LabAppointment, LabReport, UserRole
+from models import User, LabAppointment, LabReport, DoctorAppointment, AppointmentStatus, UserRole
 from schemas import LabReportCreate, LabReportUpdate, LabReportResponse
 from dependencies import get_current_active_user, get_lab_user
 from file_storage import FileStorage
@@ -20,7 +21,9 @@ router = APIRouter(prefix="/api/reports", tags=["lab-reports"])
 
 async def process_pdf_and_generate_analysis(report_id: int, file_path: str, db_session_factory):
     """
-    Background task to extract PDF text and generate AI analysis
+    Background task to extract PDF text, generate AI analysis, and
+    automatically book a doctor appointment if the AI determines criticality
+    is critical or medium (via function calling / MCP tool).
     
     Args:
         report_id: ID of the report to update
@@ -30,17 +33,41 @@ async def process_pdf_and_generate_analysis(report_id: int, file_path: str, db_s
     try:
         processor = get_report_processor()
         
-        # Process PDF and generate analysis
+        # Look up patient_id and doctor_id from the report's appointment
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            report = db.query(LabReport).filter(LabReport.id == report_id).first()
+            if not report:
+                logger.error(f"Report {report_id} not found")
+                return
+            
+            appointment = db.query(LabAppointment).filter(
+                LabAppointment.id == report.appointment_id
+            ).first()
+            
+            patient_id = appointment.patient_id if appointment else None
+            # Use the appointment's doctor_id, or fall back to the patient's linked doctor
+            doctor_id = appointment.doctor_id if appointment and appointment.doctor_id else None
+            if not doctor_id and patient_id:
+                patient = db.query(User).filter(User.id == patient_id).first()
+                if patient and patient.linked_doctor_id:
+                    doctor_id = patient.linked_doctor_id
+        finally:
+            db.close()
+        
+        # Process PDF and generate analysis (AI decides on appointment booking via tool)
         result = await processor.process_pdf_report(
             file_path=file_path,
-            test_type="laboratory"
+            test_type="laboratory",
+            patient_id=patient_id,
+            doctor_id=doctor_id
         )
         
         if result["status"] == "success":
             analysis = result["analysis"]
             
             # Update database with AI analysis
-            from database import SessionLocal
             db = SessionLocal()
             try:
                 report = db.query(LabReport).filter(LabReport.id == report_id).first()
@@ -85,6 +112,22 @@ async def process_pdf_and_generate_analysis(report_id: int, file_path: str, db_s
                     # Commit all changes
                     db.commit()
                     
+                    # Handle AI-triggered appointment booking
+                    appointment_booking = analysis.get("appointment_booking", {})
+                    if appointment_booking.get("should_book") and doctor_id and patient_id:
+                        try:
+                            _book_appointment_from_ai(
+                                db=db,
+                                patient_id=patient_id,
+                                doctor_id=doctor_id,
+                                booking_info=appointment_booking,
+                                report_id=report_id
+                            )
+                        except Exception as book_err:
+                            logger.error(f"Failed to book AI-triggered appointment for report {report_id}: {book_err}")
+                    elif appointment_booking.get("should_book") and not doctor_id:
+                        logger.warning(f"AI wants to book appointment for report {report_id} but no doctor is linked to the patient")
+                    
                     # Validate that all fields were properly stored
                     db.refresh(report)
                     validation_result = AIFieldValidator.validate_report_record(report)
@@ -104,7 +147,6 @@ async def process_pdf_and_generate_analysis(report_id: int, file_path: str, db_s
                     if report:
                         report.ai_analysis_status = "failed"
                         report.ai_analysis_error = str(e)
-                        # Keep other fields as is, just mark as failed
                         db.commit()
                         logger.error(f"Report {report_id} marked as failed due to storage error")
                 except Exception as inner_e:
@@ -152,6 +194,76 @@ async def process_pdf_and_generate_analysis(report_id: int, file_path: str, db_s
                 db.close()
         except Exception as inner_e:
             logger.error(f"Failed to update error status for report {report_id}: {inner_e}")
+
+
+def _book_appointment_from_ai(db, patient_id: int, doctor_id: int, booking_info: dict, report_id: int):
+    """
+    Book a doctor appointment triggered by the AI model's tool call.
+    
+    Criticality-based scheduling:
+    - critical: appointment the very next day at 10:00 AM
+    - medium: appointment after 3 days at 10:00 AM
+    - low: no appointment (should not reach here)
+    
+    Args:
+        db: Database session
+        patient_id: Patient's user ID
+        doctor_id: Doctor's user ID
+        booking_info: Dict with appointment details from AI tool call
+        report_id: Report ID for logging
+    """
+    from datetime import timedelta
+    
+    criticality = booking_info.get("criticality", "medium")
+    reason = booking_info.get("reason", "Follow-up on lab results")
+    notes = booking_info.get("notes", "")
+    appointment_date_str = booking_info.get("appointment_date")
+    
+    if appointment_date_str:
+        appointment_date = datetime.fromisoformat(appointment_date_str)
+    else:
+        # Fallback: compute from criticality
+        if criticality == "critical":
+            days_offset = 1
+        elif criticality == "medium":
+            days_offset = 3
+        else:
+            logger.info(f"Skipping appointment booking for report {report_id} (criticality: {criticality})")
+            return
+        appointment_date = datetime.now() + timedelta(days=days_offset)
+        appointment_date = appointment_date.replace(hour=10, minute=0, second=0, microsecond=0)
+    
+    # Verify doctor exists and is active
+    doctor = db.query(User).filter(
+        User.id == doctor_id,
+        User.role == UserRole.DOCTOR,
+        User.is_active == True
+    ).first()
+    
+    if not doctor:
+        logger.warning(f"Cannot book appointment for report {report_id}: doctor {doctor_id} not found or inactive")
+        return
+    
+    # Create the doctor appointment
+    ai_notes = f"[AI Auto-Booked - {criticality.upper()} criticality] {notes}".strip()
+    
+    db_appointment = DoctorAppointment(
+        patient_id=patient_id,
+        doctor_id=doctor_id,
+        appointment_date=appointment_date,
+        reason=reason,
+        notes=ai_notes,
+        status=AppointmentStatus.SCHEDULED
+    )
+    
+    db.add(db_appointment)
+    db.commit()
+    db.refresh(db_appointment)
+    
+    logger.info(
+        f"✓ AI auto-booked doctor appointment {db_appointment.id} for report {report_id} "
+        f"(criticality: {criticality}, date: {appointment_date}, patient: {patient_id}, doctor: {doctor_id})"
+    )
 
 
 @router.post(

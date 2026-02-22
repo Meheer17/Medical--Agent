@@ -187,45 +187,37 @@ class AIReportAnalyzer:
         pdf_text: str = None,
         images: list = None,
         test_type: str = "laboratory",
-        patient_name: Optional[str] = None
+        patient_name: Optional[str] = None,
+        patient_id: Optional[int] = None,
+        doctor_id: Optional[int] = None
     ) -> Dict:
         """
-        Analyze lab report using AI. Prefers image-based analysis, falls back to text.
+        Analyze lab report using AI with appointment booking tool.
+        The AI model decides whether to book an appointment based on criticality.
         
         Args:
             pdf_text: Extracted text from PDF (fallback)
             images: List of PIL Image objects from PDF pages (preferred)
             test_type: Type of medical test
             patient_name: Optional patient name for context
+            patient_id: Patient ID for appointment booking
+            doctor_id: Doctor ID for appointment booking
         
         Returns:
-            Dictionary containing analysis results
+            Dictionary containing analysis results and optional appointment booking info
         """
         if not self.genkit:
             raise RuntimeError("AI analyzer not initialized")
         
         try:
-            if images:
-                # Primary: Use image-based analysis with Gemini vision
-                logger.info(f"Using image-based analysis with {len(images)} page(s)")
-                analysis = await self.genkit.generate_report_analysis_from_images(
-                    images=images,
-                    test_type=test_type
-                )
-            elif pdf_text:
-                # Fallback: Use text-based analysis
-                logger.info("Using text-based analysis (fallback)")
-                max_chars = 8000
-                if len(pdf_text) > max_chars:
-                    logger.warning(f"PDF text truncated from {len(pdf_text)} to {max_chars} characters")
-                    pdf_text = pdf_text[:max_chars] + "\n[... Text truncated for processing ...]"
-                
-                analysis = await self.genkit.generate_report_analysis(
-                    pdf_text=pdf_text,
-                    test_type=test_type
-                )
-            else:
-                raise ValueError("Either images or pdf_text must be provided")
+            # Use the combined analyze + tool calling method
+            analysis = await self.genkit.analyze_and_book_appointment(
+                images=images,
+                pdf_text=pdf_text,
+                test_type=test_type,
+                patient_id=patient_id,
+                doctor_id=doctor_id
+            )
             
             # Ensure doctor recommendation is present
             if not analysis.get("doctor_recommendation"):
@@ -280,19 +272,23 @@ class ReportProcessor:
         self,
         file_path: str,
         test_type: str = "laboratory",
-        patient_name: Optional[str] = None
+        patient_name: Optional[str] = None,
+        patient_id: Optional[int] = None,
+        doctor_id: Optional[int] = None
     ) -> Dict:
         """
-        Complete pipeline: Convert PDF to images and generate AI analysis.
-        Falls back to text extraction if image conversion fails.
+        Complete pipeline: Convert PDF to images, generate AI analysis,
+        and let the AI model decide whether to book an appointment.
         
         Args:
             file_path: Path to saved PDF file
             test_type: Type of medical test
             patient_name: Optional patient name
+            patient_id: Patient ID for appointment booking
+            doctor_id: Doctor ID for appointment booking
         
         Returns:
-            Complete analysis result
+            Complete analysis result with optional appointment booking info
         """
         try:
             # Primary: Convert PDF pages to images for vision analysis
@@ -306,12 +302,14 @@ class ReportProcessor:
                 # Fallback: Extract text
                 pdf_text = self.pdf_processor.extract_text_from_pdf(file_path)
             
-            # Analyze with AI
+            # Analyze with AI (includes tool-based appointment booking)
             analysis = await self.ai_analyzer.analyze_report(
                 pdf_text=pdf_text,
                 images=images,
                 test_type=test_type,
-                patient_name=patient_name
+                patient_name=patient_name,
+                patient_id=patient_id,
+                doctor_id=doctor_id
             )
             
             pages = len(images) if images else (pdf_text.count("--- Page") if pdf_text else 0)
