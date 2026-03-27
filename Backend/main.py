@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -15,14 +16,18 @@ from dependencies import get_current_active_user
 from schemas import UserResponse
 from file_storage import FileStorage
 
-# Initialize database
-init_db()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize DB schema on startup (not at import time)
+    init_db()
+    yield
 
 # Create FastAPI app
 app = FastAPI(
-    title="Nithin App API",
+    title="ClinIQ API",
     description="FastAPI backend with JWT authentication and MySQL database",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware configuration
@@ -124,7 +129,7 @@ async def download_file(
 async def root():
     """Root endpoint"""
     return {
-        "message": "Welcome to Nithin App API",
+        "message": "Welcome to ClinIQ API",
         "docs": "/docs",
         "health": "/health"
     }

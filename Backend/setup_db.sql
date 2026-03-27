@@ -1,11 +1,11 @@
 -- Create database
-CREATE DATABASE IF NOT EXISTS nithin_db;
+CREATE DATABASE IF NOT EXISTS cliniq_db;
 
 -- Create user 'mahi' with all privileges
 CREATE USER IF NOT EXISTS 'mahi'@'localhost' IDENTIFIED BY 'mahi@123';
 
--- Grant all privileges on nithin_db
-GRANT ALL PRIVILEGES ON nithin_db.* TO 'mahi'@'localhost';
+-- Grant all privileges on cliniq_db
+GRANT ALL PRIVILEGES ON cliniq_db.* TO 'mahi'@'localhost';
 
 -- Grant global privileges
 GRANT ALL PRIVILEGES ON *.* TO 'mahi'@'localhost' WITH GRANT OPTION;
@@ -20,7 +20,7 @@ SELECT User, Host FROM mysql.user WHERE User='mahi';
 SHOW DATABASES;
 
 -- Use the database
-USE nithin_db;
+USE cliniq_db;
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS lab_reports (
     ai_key_findings LONGTEXT NULL COMMENT 'JSON array of key findings from report',
     ai_abnormal_values LONGTEXT NULL COMMENT 'JSON array of abnormal/out-of-range values',
     ai_clinical_significance LONGTEXT NULL COMMENT 'AI interpretation of clinical significance',
+    ai_criticality VARCHAR(50) DEFAULT 'low' NULL COMMENT 'AI-assessed criticality: critical, medium, low',
     ai_doctor_recommendation LONGTEXT NULL COMMENT 'Recommendations including mandatory doctor visit reminder',
     ai_analysis_status ENUM('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED') DEFAULT 'PENDING' NOT NULL COMMENT 'Status of AI analysis',
     ai_analysis_error TEXT NULL COMMENT 'Error message if analysis failed',

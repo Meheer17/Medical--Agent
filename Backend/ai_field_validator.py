@@ -17,6 +17,7 @@ class AIFieldValidator:
         'ai_key_findings': str,  # Should be JSON
         'ai_abnormal_values': str,  # Should be JSON
         'ai_clinical_significance': str,
+        'ai_criticality': (str, type(None)),  # critical, medium, low
         'ai_doctor_recommendation': str,
         'ai_analysis_status': str,
         'ai_analysis_error': (str, type(None))
@@ -107,6 +108,7 @@ class AIFieldValidator:
             'ai_key_findings': db_report.ai_key_findings,
             'ai_abnormal_values': db_report.ai_abnormal_values,
             'ai_clinical_significance': db_report.ai_clinical_significance,
+            'ai_criticality': db_report.ai_criticality,
             'ai_doctor_recommendation': db_report.ai_doctor_recommendation,
             'ai_analysis_status': db_report.ai_analysis_status,
             'ai_analysis_error': db_report.ai_analysis_error
@@ -131,6 +133,7 @@ class AIFieldValidator:
                 'has_key_findings': bool(db_report.ai_key_findings),
                 'has_abnormal_values': bool(db_report.ai_abnormal_values),
                 'has_clinical_significance': bool(db_report.ai_clinical_significance),
+                'criticality': db_report.ai_criticality,
                 'has_recommendation': bool(db_report.ai_doctor_recommendation),
                 'error_message': db_report.ai_analysis_error
             }

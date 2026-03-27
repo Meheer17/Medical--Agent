@@ -4,7 +4,9 @@ Handles LLM configuration and model initialization
 """
 import os
 from typing import Optional
+from datetime import datetime, timedelta
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +78,171 @@ class GenkitManager:
             
             # Initialize the model
             self.model = GenerativeModel('gemini-2.0-flash')
-            logger.info("✓ Google AI initialized successfully with gemini-2.0-flash")
+            
+            # Initialize a separate model with function calling tools for appointment booking
+            self.book_appointment_tool = genai.protos.Tool(
+                function_declarations=[
+                    genai.protos.FunctionDeclaration(
+                        name="book_doctor_appointment",
+                        description=(
+                            "Book a doctor appointment for the patient based on the criticality of lab report results. "
+                            "Call this tool ONLY if criticality is 'critical' or 'medium'. "
+                            "Do NOT call this tool if criticality is 'low'."
+                        ),
+                        parameters=genai.protos.Schema(
+                            type=genai.protos.Type.OBJECT,
+                            properties={
+                                "criticality": genai.protos.Schema(
+                                    type=genai.protos.Type.STRING,
+                                    description="The criticality level: 'critical' or 'medium'"
+                                ),
+                                "reason": genai.protos.Schema(
+                                    type=genai.protos.Type.STRING,
+                                    description="Brief reason for the appointment based on the lab report findings"
+                                ),
+                                "notes": genai.protos.Schema(
+                                    type=genai.protos.Type.STRING,
+                                    description="Additional clinical notes about the abnormal findings that the doctor should know"
+                                )
+                            },
+                            required=["criticality", "reason"]
+                        )
+                    )
+                ]
+            )
+            self.model_with_tools = GenerativeModel(
+                'gemini-2.0-flash',
+                tools=[self.book_appointment_tool]
+            )
+            
+            logger.info("✓ Google AI initialized successfully with gemini-2.0-flash (with appointment booking tool)")
         except ImportError as e:
             logger.error(f"Google AI library not installed: {e}")
             raise
         except Exception as e:
             logger.error(f"Failed to initialize Google AI: {e}")
+            raise
+    
+    async def analyze_and_book_appointment(
+        self,
+        images: list = None,
+        pdf_text: str = None,
+        test_type: str = "lab",
+        patient_id: int = None,
+        doctor_id: int = None
+    ) -> dict:
+        """
+        Analyze a lab report and let the AI model decide whether to book an appointment
+        using the book_doctor_appointment tool (function calling).
+        
+        The AI model is given a tool to book appointments. Based on its analysis:
+        - Critical: AI calls the tool → appointment booked for next day
+        - Medium: AI calls the tool → appointment booked after 3 days
+        - Low: AI does NOT call the tool → no appointment booked
+        
+        Args:
+            images: List of PIL Image objects (preferred)
+            pdf_text: Extracted text from PDF (fallback)
+            test_type: Type of test
+            patient_id: ID of the patient (for appointment booking)
+            doctor_id: ID of the patient's linked doctor (for appointment booking)
+        
+        Returns:
+            Dictionary with analysis results and optional appointment info
+        """
+        if not self.model_with_tools:
+            raise RuntimeError("LLM model with tools not initialized")
+        
+        tool_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report and provide ALL of the following structured output.
+
+Provide analysis in this exact format (use | as delimiter):
+
+SUMMARY|Your concise summary here
+KEY_FINDINGS|Finding 1 | Finding 2 | Finding 3
+ABNORMAL_VALUES|Value 1 (abnormal) | Value 2 (abnormal)
+CLINICAL_SIGNIFICANCE|What these results indicate
+CRITICALITY|critical OR medium OR low
+DOCTOR_RECOMMENDATION|Patient should visit their doctor to discuss these results and receive professional medical guidance
+
+For CRITICALITY, assess the overall urgency of the results:
+- "critical" = Life-threatening or severely abnormal values requiring immediate medical attention
+- "medium" = Moderately abnormal values that need medical follow-up soon
+- "low" = Normal or mildly abnormal values with no immediate concern
+
+IMPORTANT: After your analysis, if the CRITICALITY is "critical" or "medium", you MUST call the book_doctor_appointment tool to schedule an appointment for the patient. If criticality is "low", do NOT call the tool.
+
+Return ALL fields above, then decide on tool usage."""
+        
+        try:
+            # Build content
+            if images:
+                content = [tool_prompt] + images
+            elif pdf_text:
+                content = [tool_prompt + f"\n\nLAB REPORT TEXT:\n{pdf_text}"]
+            else:
+                raise ValueError("Either images or pdf_text must be provided")
+            
+            # Call model with tools enabled
+            response = self.model_with_tools.generate_content(content)
+            
+            # Parse the text analysis from the response
+            analysis_text = ""
+            appointment_tool_call = None
+            
+            # Extract text and function calls from the response
+            for candidate in response.candidates:
+                for part in candidate.content.parts:
+                    if hasattr(part, 'text') and part.text:
+                        analysis_text += part.text
+                    if hasattr(part, 'function_call') and part.function_call:
+                        fn_call = part.function_call
+                        if fn_call.name == "book_doctor_appointment":
+                            appointment_tool_call = {
+                                "criticality": fn_call.args.get("criticality", "medium"),
+                                "reason": fn_call.args.get("reason", "Follow-up on lab results"),
+                                "notes": fn_call.args.get("notes", "")
+                            }
+            
+            # Parse the structured analysis
+            result = self._parse_analysis_response(analysis_text)
+            
+            # Process the tool call if the AI decided to book
+            if appointment_tool_call:
+                criticality = appointment_tool_call["criticality"].lower()
+                
+                if criticality == "critical":
+                    days_offset = 1  # Next day
+                elif criticality == "medium":
+                    days_offset = 3  # After 3 days
+                else:
+                    days_offset = None  # Should not happen, but safety check
+                
+                if days_offset is not None:
+                    appointment_date = datetime.now() + timedelta(days=days_offset)
+                    # Set appointment time to 10:00 AM
+                    appointment_date = appointment_date.replace(hour=10, minute=0, second=0, microsecond=0)
+                    
+                    result["appointment_booking"] = {
+                        "should_book": True,
+                        "criticality": criticality,
+                        "appointment_date": appointment_date.isoformat(),
+                        "reason": appointment_tool_call["reason"],
+                        "notes": appointment_tool_call.get("notes", ""),
+                        "patient_id": patient_id,
+                        "doctor_id": doctor_id
+                    }
+                    logger.info(f"✓ AI decided to book appointment (criticality: {criticality}, date: {appointment_date})")
+                else:
+                    result["appointment_booking"] = {"should_book": False}
+            else:
+                result["appointment_booking"] = {"should_book": False}
+                logger.info("✓ AI decided NOT to book appointment (low criticality)")
+            
+            logger.info("✓ Report analysis with appointment tool completed successfully")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in analyze_and_book_appointment: {e}")
             raise
     
     # COMMENTED OUT - Ollama initialization
@@ -156,19 +317,20 @@ Please provide a clear, professional analysis suitable for a patient to understa
     
     async def generate_report_analysis_from_images(self, images: list, test_type: str = "lab") -> dict:
         """
-        Generate comprehensive analysis of lab report from page images
+        Generate comprehensive analysis of lab report from page images.
+        Returns all analysis data including criticality in a single AI call.
         
         Args:
             images: List of PIL Image objects (one per page)
             test_type: Type of test (lab, pathology, etc.)
         
         Returns:
-            Dictionary with analysis results
+            Dictionary with analysis results including criticality
         """
         if not self.model:
             raise RuntimeError("LLM model not initialized")
         
-        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report images and provide structured output.
+        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report images and provide ALL of the following structured output in a SINGLE response.
 
 Provide analysis in this exact format (use | as delimiter):
 
@@ -176,9 +338,16 @@ SUMMARY|Your concise summary here
 KEY_FINDINGS|Finding 1 | Finding 2 | Finding 3
 ABNORMAL_VALUES|Value 1 (abnormal) | Value 2 (abnormal)
 CLINICAL_SIGNIFICANCE|What these results indicate
+CRITICALITY|critical OR medium OR low
 DOCTOR_RECOMMENDATION|Patient should visit their doctor to discuss these results and receive professional medical guidance
 
-Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation."""
+For CRITICALITY, assess the overall urgency of the results:
+- "critical" = Life-threatening or severely abnormal values requiring immediate medical attention
+- "medium" = Moderately abnormal values that need medical follow-up soon
+- "low" = Normal or mildly abnormal values with no immediate concern
+
+Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation.
+Return ALL fields above in a SINGLE response."""
         
         try:
             # Build content list: prompt + all page images
@@ -208,7 +377,7 @@ Remember to ALWAYS recommend that the patient visits a doctor for proper interpr
         if not self.model:
             raise RuntimeError("LLM model not initialized")
         
-        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report and provide structured output.
+        analysis_prompt = f"""You are an expert medical report analyzer. Analyze this {test_type} report and provide ALL of the following structured output in a SINGLE response.
 
 LAB REPORT TEXT:
 {pdf_text}
@@ -219,9 +388,16 @@ SUMMARY|Your concise summary here
 KEY_FINDINGS|Finding 1 | Finding 2 | Finding 3
 ABNORMAL_VALUES|Value 1 (abnormal) | Value 2 (abnormal)
 CLINICAL_SIGNIFICANCE|What these results indicate
+CRITICALITY|critical OR medium OR low
 DOCTOR_RECOMMENDATION|Patient should visit their doctor to discuss these results and receive professional medical guidance
 
-Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation."""
+For CRITICALITY, assess the overall urgency of the results:
+- "critical" = Life-threatening or severely abnormal values requiring immediate medical attention
+- "medium" = Moderately abnormal values that need medical follow-up soon
+- "low" = Normal or mildly abnormal values with no immediate concern
+
+Remember to ALWAYS recommend that the patient visits a doctor for proper interpretation.
+Return ALL fields above in a SINGLE response."""
         
         try:
             response = self.model.generate_content(analysis_prompt)
@@ -250,6 +426,7 @@ Remember to ALWAYS recommend that the patient visits a doctor for proper interpr
             "key_findings": [],
             "abnormal_values": [],
             "clinical_significance": "",
+            "criticality": "low",
             "doctor_recommendation": "Patient should visit their doctor for proper interpretation and guidance of these lab results."
         }
         
@@ -269,6 +446,13 @@ Remember to ALWAYS recommend that the patient visits a doctor for proper interpr
                         analysis["abnormal_values"] = [v.strip() for v in value.split('|') if v.strip()]
                     elif key == "clinical_significance":
                         analysis["clinical_significance"] = value
+                    elif key == "criticality":
+                        criticality_val = value.strip().lower()
+                        if criticality_val in ("critical", "medium", "low"):
+                            analysis["criticality"] = criticality_val
+                        else:
+                            logger.warning(f"Unknown criticality value: {criticality_val}, defaulting to 'low'")
+                            analysis["criticality"] = "low"
                     elif key == "doctor_recommendation":
                         analysis["doctor_recommendation"] = value if value else analysis["doctor_recommendation"]
         except Exception as e:

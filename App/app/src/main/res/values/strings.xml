@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nithin Health</string>
+    <string name="app_name">ClinIQ</string>
     <string name="login">Log In</string>
     <string name="signup">Sign Up</string>
     <string name="email">Email</string>
