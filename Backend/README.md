@@ -17,7 +17,7 @@ A FastAPI backend application with user authentication, JWT tokens, and MySQL da
 ## Project Structure
 
 ```
-nithin-app/
+nitin-app/
 ├── main.py              # FastAPI application entry point
 ├── config.py            # Configuration management
 ├── database.py          # Database setup and session management
@@ -36,7 +36,7 @@ nithin-app/
 ### 1. Clone and Setup
 
 ```bash
-cd /var/home/mahi17/Github/nithin-app
+cd /var/home/mahi17/Github/nitin-app
 ```
 
 ### 2. Install Dependencies

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from datetime import datetime
 from typing import Optional
 from enum import Enum
@@ -93,9 +93,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
             "example": {
                 "id": 1,
                 "email": "user@example.com",
@@ -107,7 +105,7 @@ class UserResponse(BaseModel):
                 "created_at": "2024-01-01T00:00:00",
                 "updated_at": "2024-01-01T00:00:00"
             }
-        }
+        })
 
 # Profile Response Schemas - Role Based
 class DoctorProfile(BaseModel):
@@ -120,9 +118,7 @@ class DoctorProfile(BaseModel):
     is_active: bool
     created_at: datetime
     
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
             "example": {
                 "id": 1,
                 "email": "doctor@example.com",
@@ -132,7 +128,7 @@ class DoctorProfile(BaseModel):
                 "is_active": True,
                 "created_at": "2024-01-01T00:00:00"
             }
-        }
+        })
 
 class PatientProfile(BaseModel):
     """Schema for patient profile response"""
@@ -145,9 +141,7 @@ class PatientProfile(BaseModel):
     is_verified: bool
     created_at: datetime
     
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
             "example": {
                 "id": 2,
                 "email": "patient@example.com",
@@ -158,7 +152,7 @@ class PatientProfile(BaseModel):
                 "is_verified": True,
                 "created_at": "2024-01-01T00:00:00"
             }
-        }
+        })
 
 class LabProfile(BaseModel):
     """Schema for lab profile response"""
@@ -170,9 +164,7 @@ class LabProfile(BaseModel):
     is_active: bool
     created_at: datetime
     
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
             "example": {
                 "id": 3,
                 "email": "lab@example.com",
@@ -182,7 +174,7 @@ class LabProfile(BaseModel):
                 "is_active": True,
                 "created_at": "2024-01-01T00:00:00"
             }
-        }
+        })
 
 # Error Response Schema
 class ErrorResponse(BaseModel):
@@ -243,9 +235,7 @@ class DoctorAppointmentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
             "example": {
                 "id": 1,
                 "patient_id": 2,
@@ -257,7 +247,7 @@ class DoctorAppointmentResponse(BaseModel):
                 "created_at": "2026-02-17T00:00:00",
                 "updated_at": "2026-02-17T00:00:00"
             }
-        }
+        })
 
 # Lab Appointment Schemas
 class LabAppointmentCreate(BaseModel):
@@ -329,9 +319,7 @@ class LabAppointmentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
             "example": {
                 "id": 1,
                 "patient_id": 2,
@@ -345,7 +333,10 @@ class LabAppointmentResponse(BaseModel):
                 "created_at": "2026-02-17T00:00:00",
                 "updated_at": "2026-02-17T00:00:00"
             }
-        }
+        })
+
+# Resolve forward references (Token.user -> UserResponse)
+Token.model_rebuild()
 
 # Lab Report Schemas
 class LabReportCreate(BaseModel):
@@ -555,4 +546,3 @@ class QueryResponse(BaseModel):
                 "responded_at": "2026-02-18T10:30:00"
             }
         }
-

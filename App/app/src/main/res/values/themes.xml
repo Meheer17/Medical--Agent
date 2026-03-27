@@ -19,7 +19,7 @@
     </style>
 
     <!-- Auth Theme (no action bar, full screen feel) -->
-    <style name="Theme.ClinIQ.Auth" parent="Theme.ClinIQ"
+    <style name="Theme.ClinIQ.Auth" parent="Theme.ClinIQ">
         <item name="android:statusBarColor">@color/primary</item>
     </style>
 
