@@ -1,19 +1,22 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 import secrets
+from pymongo import DESCENDING
 
 from database import get_db
-from models import User, UserRole, LabAppointment, DoctorAppointment, LabReport
-from schemas import PatientProfileUpdate, LinkDoctorRequest, PatientProfileResponse, LabReportResponse, DoctorAppointmentResponse, LabAppointmentResponse
-from dependencies import get_current_active_user, get_patient_user, get_doctor_user
+from models import UserRole
+from schemas import (
+    PatientProfileUpdate, LinkDoctorRequest, PatientProfileResponse,
+    LabReportResponse, DoctorAppointmentResponse, LabAppointmentResponse,
+    MyPatientsResponse, UserResponse
+)
+from dependencies import get_current_active_user, get_patient_user, get_doctor_user, DictWrapper
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
-
 
 def generate_doctor_code() -> str:
     """Generate a unique doctor code"""
     return "DOC" + secrets.token_hex(8).upper()
-
 
 @router.get(
     "/me",
@@ -22,11 +25,10 @@ def generate_doctor_code() -> str:
     description="Get current user's profile information"
 )
 async def get_my_profile(
-    current_user: User = Depends(get_current_active_user)
+    current_user: DictWrapper = Depends(get_current_active_user)
 ):
     """Get current user's profile"""
     return current_user
-
 
 @router.put(
     "/me",
@@ -36,28 +38,28 @@ async def get_my_profile(
 )
 async def update_my_profile(
     profile_update: PatientProfileUpdate,
-    current_user: User = Depends(get_patient_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_patient_user),
+    db = Depends(get_db)
 ):
-    """
-    Update patient profile
-    
-    - **full_name**: Full name
-    - **phone**: Phone number
-    - **address**: Home address
-    """
+    """Update patient profile"""
+    update_data = {}
     if profile_update.full_name is not None:
+        update_data["full_name"] = profile_update.full_name
         current_user.full_name = profile_update.full_name
     if profile_update.phone is not None:
+        update_data["phone"] = profile_update.phone
         current_user.phone = profile_update.phone
     if profile_update.address is not None:
+        update_data["address"] = profile_update.address
         current_user.address = profile_update.address
-    
-    db.commit()
-    db.refresh(current_user)
-    
-    return current_user
 
+    if update_data:
+        update_data["updated_at"] = datetime.now(timezone.utc)
+        await db.users.update_one({"id": current_user.id}, {"$set": update_data})
+        updated_doc = await db.users.find_one({"id": current_user.id})
+        return DictWrapper(updated_doc)
+
+    return current_user
 
 @router.post(
     "/link-doctor",
@@ -67,20 +69,15 @@ async def update_my_profile(
 )
 async def link_to_doctor(
     request: LinkDoctorRequest,
-    current_user: User = Depends(get_patient_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_patient_user),
+    db = Depends(get_db)
 ):
-    """
-    Link patient to a doctor using the doctor's unique code
-    
-    - **doctor_code**: Unique code provided by the doctor
-    """
-    # Find doctor by code
-    doctor = db.query(User).filter(
-        User.doctor_code == request.doctor_code,
-        User.role == UserRole.DOCTOR,
-        User.is_active == True
-    ).first()
+    """Link patient to a doctor using the doctor's unique code"""
+    doctor = await db.users.find_one({
+        "doctor_code": request.doctor_code,
+        "role": UserRole.DOCTOR.value,
+        "is_active": True
+    })
     
     if not doctor:
         raise HTTPException(
@@ -88,14 +85,13 @@ async def link_to_doctor(
             detail="Doctor not found with provided code or is inactive"
         )
     
-    # Link patient to doctor
-    current_user.linked_doctor_id = doctor.id
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$set": {"linked_doctor_id": doctor["id"], "updated_at": datetime.now(timezone.utc)}}
+    )
     
-    db.commit()
-    db.refresh(current_user)
-    
-    return current_user
-
+    updated_doc = await db.users.find_one({"id": current_user.id})
+    return DictWrapper(updated_doc)
 
 @router.get(
     "/doctors",
@@ -104,25 +100,25 @@ async def link_to_doctor(
     description="Get a list of all active doctors"
 )
 async def list_all_doctors(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_current_active_user),
+    db = Depends(get_db)
 ):
-    """List all active doctors (available to any authenticated user)"""
-    doctors = db.query(User).filter(
-        User.role == UserRole.DOCTOR,
-        User.is_active == True
-    ).all()
+    """List all active doctors"""
+    cursor = db.users.find({
+        "role": UserRole.DOCTOR.value,
+        "is_active": True
+    })
+    doctors = await cursor.to_list(length=1000)
     return [
         {
-            "id": d.id,
-            "name": d.full_name or d.username,
-            "email": d.email,
-            "username": d.username,
-            "phone": d.phone
+            "id": d["id"],
+            "name": d.get("full_name") or d.get("username"),
+            "email": d.get("email"),
+            "username": d.get("username"),
+            "phone": d.get("phone")
         }
         for d in doctors
     ]
-
 
 @router.get(
     "/labs",
@@ -131,25 +127,25 @@ async def list_all_doctors(
     description="Get a list of all active labs"
 )
 async def list_all_labs(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_current_active_user),
+    db = Depends(get_db)
 ):
-    """List all active labs (available to any authenticated user)"""
-    labs = db.query(User).filter(
-        User.role == UserRole.LAB,
-        User.is_active == True
-    ).all()
+    """List all active labs"""
+    cursor = db.users.find({
+        "role": UserRole.LAB.value,
+        "is_active": True
+    })
+    labs = await cursor.to_list(length=1000)
     return [
         {
-            "id": l.id,
-            "name": l.full_name or l.username,
-            "email": l.email,
-            "username": l.username,
-            "phone": l.phone
+            "id": l["id"],
+            "name": l.get("full_name") or l.get("username"),
+            "email": l.get("email"),
+            "username": l.get("username"),
+            "phone": l.get("phone")
         }
         for l in labs
     ]
-
 
 @router.get(
     "/my-code",
@@ -158,27 +154,23 @@ async def list_all_labs(
     description="Get the unique doctor code (doctors only)"
 )
 async def get_my_doctor_code(
-    current_user: User = Depends(get_doctor_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_doctor_user),
+    db = Depends(get_db)
 ):
-    """
-    Get my doctor code
-    
-    This code should be shared with patients to link them to you
-    """
-    if not current_user.doctor_code:
-        # Generate code if not exists
+    """Get my doctor code"""
+    code = current_user.doctor_code
+    if not code:
         code = generate_doctor_code()
-        current_user.doctor_code = code
-        db.commit()
-        db.refresh(current_user)
+        await db.users.update_one(
+            {"id": current_user.id},
+            {"$set": {"doctor_code": code, "updated_at": datetime.now(timezone.utc)}}
+        )
     
     return {
         "doctor_id": current_user.id,
-        "doctor_code": current_user.doctor_code,
+        "doctor_code": code,
         "message": "Share this code with patients to let them link to you"
     }
-
 
 @router.get(
     "/regenerate-code",
@@ -187,44 +179,42 @@ async def get_my_doctor_code(
     description="Generate a new doctor code"
 )
 async def regenerate_doctor_code(
-    current_user: User = Depends(get_doctor_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_doctor_user),
+    db = Depends(get_db)
 ):
-    """
-    Regenerate a new doctor code
-    
-    The old code will be invalidated
-    """
+    """Regenerate a new doctor code"""
     code = generate_doctor_code()
-    current_user.doctor_code = code
-    
-    db.commit()
-    db.refresh(current_user)
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$set": {"doctor_code": code, "updated_at": datetime.now(timezone.utc)}}
+    )
     
     return {
         "doctor_id": current_user.id,
-        "doctor_code": current_user.doctor_code,
+        "doctor_code": code,
         "message": "New code generated. Share it with patients."
     }
 
-
 @router.get(
     "/my-patients",
+    response_model=MyPatientsResponse,
     tags=["profiles"],
     summary="Get my linked patients",
     description="Get all patients linked to current doctor"
 )
 async def get_my_patients(
-    current_user: User = Depends(get_doctor_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_doctor_user),
+    db = Depends(get_db)
 ):
-    """
-    Get all patients linked to this doctor
-    """
-    patients = db.query(User).filter(
-        User.linked_doctor_id == current_user.id,
-        User.role == UserRole.PATIENT
-    ).all()
+    """Get all patients linked to this doctor"""
+    cursor = db.users.find({
+        "linked_doctor_id": current_user.id,
+        "role": UserRole.PATIENT.value
+    })
+    patients = await cursor.to_list(length=1000)
+    for p in patients:
+        p.pop("_id", None)
+        p.pop("hashed_password", None)
     
     return {
         "doctor_id": current_user.id,
@@ -232,28 +222,24 @@ async def get_my_patients(
         "patients": patients
     }
 
-
 @router.get(
     "/patient/{patient_id}",
+    response_model=UserResponse,
     tags=["profiles"],
     summary="Get patient details",
     description="Get details of a patient linked to current doctor"
 )
 async def get_patient_by_id(
     patient_id: int,
-    current_user: User = Depends(get_doctor_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_doctor_user),
+    db = Depends(get_db)
 ):
-    """
-    Get details of a patient
-    
-    Doctor can only view patients linked to them
-    """
-    patient = db.query(User).filter(
-        User.id == patient_id,
-        User.role == UserRole.PATIENT,
-        User.is_active == True
-    ).first()
+    """Get details of a patient"""
+    patient = await db.users.find_one({
+        "id": patient_id,
+        "role": UserRole.PATIENT.value,
+        "is_active": True
+    })
     
     if not patient:
         raise HTTPException(
@@ -261,15 +247,15 @@ async def get_patient_by_id(
             detail="Patient not found"
         )
     
-    # Check if patient is linked to this doctor
-    if patient.linked_doctor_id != current_user.id:
+    if patient.get("linked_doctor_id") != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Patient is not linked to you"
         )
     
+    patient.pop("_id", None)
+    patient.pop("hashed_password", None)
     return patient
-
 
 @router.get(
     "/my-linked-doctor",
@@ -279,22 +265,18 @@ async def get_patient_by_id(
     description="Get details of linked doctor (patients only)"
 )
 async def get_my_linked_doctor(
-    current_user: User = Depends(get_patient_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_patient_user),
+    db = Depends(get_db)
 ):
-    """
-    Get details of my linked doctor
-    """
-    if not current_user.linked_doctor_id:
+    """Get details of my linked doctor"""
+    linked_id = current_user.get("linked_doctor_id")
+    if not linked_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="You haven't linked to any doctor yet"
         )
     
-    doctor = db.query(User).filter(
-        User.id == current_user.linked_doctor_id
-    ).first()
-    
+    doctor = await db.users.find_one({"id": linked_id})
     if not doctor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -302,13 +284,12 @@ async def get_my_linked_doctor(
         )
     
     return {
-        "doctor_id": doctor.id,
-        "name": doctor.full_name or doctor.username,
-        "email": doctor.email,
-        "username": doctor.username,
-        "phone": doctor.phone
+        "doctor_id": doctor["id"],
+        "name": doctor.get("full_name") or doctor.get("username"),
+        "email": doctor.get("email"),
+        "username": doctor.get("username"),
+        "phone": doctor.get("phone")
     }
-
 
 @router.post(
     "/unlink-doctor",
@@ -317,24 +298,22 @@ async def get_my_linked_doctor(
     description="Remove link to current doctor"
 )
 async def unlink_from_doctor(
-    current_user: User = Depends(get_patient_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_patient_user),
+    db = Depends(get_db)
 ):
-    """
-    Unlink from current doctor
-    """
-    if not current_user.linked_doctor_id:
+    """Unlink from current doctor"""
+    if not current_user.get("linked_doctor_id"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You are not linked to any doctor"
         )
     
-    current_user.linked_doctor_id = None
-    db.commit()
-    db.refresh(current_user)
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$set": {"linked_doctor_id": None, "updated_at": datetime.now(timezone.utc)}}
+    )
     
     return {"message": "Successfully unlinked from doctor"}
-
 
 @router.get(
     "/patient/{patient_id}/reports",
@@ -345,31 +324,28 @@ async def unlink_from_doctor(
 )
 async def get_patient_reports(
     patient_id: int,
-    current_user: User = Depends(get_doctor_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_doctor_user),
+    db = Depends(get_db)
 ):
     """Get all lab reports for a specific patient linked to this doctor"""
-    patient = db.query(User).filter(
-        User.id == patient_id,
-        User.role == UserRole.PATIENT,
-        User.is_active == True
-    ).first()
+    patient = await db.users.find_one({
+        "id": patient_id,
+        "role": UserRole.PATIENT.value,
+        "is_active": True
+    })
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
-    if patient.linked_doctor_id != current_user.id:
+    if patient.get("linked_doctor_id") != current_user.id:
         raise HTTPException(status_code=403, detail="Patient is not linked to you")
 
-    patient_appointments = db.query(LabAppointment.id).filter(
-        LabAppointment.patient_id == patient_id
-    ).all()
-    appointment_ids = [a[0] for a in patient_appointments]
-    if not appointment_ids:
+    patient_appts = await db.lab_appointments.find({"patient_id": patient_id}).to_list(length=1000)
+    appt_ids = [a["id"] for a in patient_appts]
+    if not appt_ids:
         return []
-    reports = db.query(LabReport).filter(
-        LabReport.appointment_id.in_(appointment_ids)
-    ).order_by(LabReport.created_at.desc()).all()
+    
+    cursor = db.lab_reports.find({"appointment_id": {"$in": appt_ids}}).sort("created_at", DESCENDING)
+    reports = await cursor.to_list(length=1000)
     return reports
-
 
 @router.get(
     "/patient/{patient_id}/doctor-appointments",
@@ -380,25 +356,23 @@ async def get_patient_reports(
 )
 async def get_patient_doctor_appointments(
     patient_id: int,
-    current_user: User = Depends(get_doctor_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_doctor_user),
+    db = Depends(get_db)
 ):
     """Get all doctor appointments for a specific patient"""
-    patient = db.query(User).filter(
-        User.id == patient_id,
-        User.role == UserRole.PATIENT,
-        User.is_active == True
-    ).first()
+    patient = await db.users.find_one({
+        "id": patient_id,
+        "role": UserRole.PATIENT.value,
+        "is_active": True
+    })
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
-    if patient.linked_doctor_id != current_user.id:
+    if patient.get("linked_doctor_id") != current_user.id:
         raise HTTPException(status_code=403, detail="Patient is not linked to you")
 
-    appointments = db.query(DoctorAppointment).filter(
-        DoctorAppointment.patient_id == patient_id
-    ).order_by(DoctorAppointment.created_at.desc()).all()
+    cursor = db.doctor_appointments.find({"patient_id": patient_id}).sort("created_at", DESCENDING)
+    appointments = await cursor.to_list(length=1000)
     return appointments
-
 
 @router.get(
     "/patient/{patient_id}/lab-appointments",
@@ -409,21 +383,20 @@ async def get_patient_doctor_appointments(
 )
 async def get_patient_lab_appointments(
     patient_id: int,
-    current_user: User = Depends(get_doctor_user),
-    db: Session = Depends(get_db)
+    current_user: DictWrapper = Depends(get_doctor_user),
+    db = Depends(get_db)
 ):
     """Get all lab appointments for a specific patient"""
-    patient = db.query(User).filter(
-        User.id == patient_id,
-        User.role == UserRole.PATIENT,
-        User.is_active == True
-    ).first()
+    patient = await db.users.find_one({
+        "id": patient_id,
+        "role": UserRole.PATIENT.value,
+        "is_active": True
+    })
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
-    if patient.linked_doctor_id != current_user.id:
+    if patient.get("linked_doctor_id") != current_user.id:
         raise HTTPException(status_code=403, detail="Patient is not linked to you")
 
-    appointments = db.query(LabAppointment).filter(
-        LabAppointment.patient_id == patient_id
-    ).order_by(LabAppointment.created_at.desc()).all()
+    cursor = db.lab_appointments.find({"patient_id": patient_id}).sort("created_at", DESCENDING)
+    appointments = await cursor.to_list(length=1000)
     return appointments

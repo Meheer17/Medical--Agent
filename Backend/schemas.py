@@ -494,6 +494,15 @@ class PatientProfileResponse(BaseModel):
             }
         }
 
+class MyPatientsResponse(BaseModel):
+    """Schema for doctor's linked patients list response"""
+    doctor_id: int
+    patient_count: int
+    patients: list[UserResponse]
+
+    class Config:
+        from_attributes = True
+
 # Query/Message Schemas
 class QueryCreate(BaseModel):
     """Schema for creating a query"""

@@ -74,10 +74,14 @@ class GenkitManager:
             import google.generativeai as genai
             from google.generativeai import GenerativeModel
             
+            from config import settings
+            model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.6-flash') or 'gemini-3.6-flash'
+
             genai.configure(api_key=self.config.api_key)
-            
+            os.environ["GOOGLE_API_KEY"] = self.config.api_key
+
             # Initialize the model
-            self.model = GenerativeModel('gemini-2.0-flash')
+            self.model = GenerativeModel(model_name)
             
             # Initialize a separate model with function calling tools for appointment booking
             self.book_appointment_tool = genai.protos.Tool(
@@ -111,11 +115,11 @@ class GenkitManager:
                 ]
             )
             self.model_with_tools = GenerativeModel(
-                'gemini-2.0-flash',
+                model_name,
                 tools=[self.book_appointment_tool]
             )
             
-            logger.info("✓ Google AI initialized successfully with gemini-2.0-flash (with appointment booking tool)")
+            logger.info(f"✓ Google AI initialized successfully with {model_name} (with appointment booking tool)")
         except ImportError as e:
             logger.error(f"Google AI library not installed: {e}")
             raise
