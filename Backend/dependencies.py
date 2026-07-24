@@ -1,30 +1,26 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer
 from starlette.requests import Request
-from sqlalchemy.orm import Session
-
 from database import get_db
-from models import User, UserRole
+from models import UserRole
 from auth import JWTUtil
 
-security = HTTPBearer()
+class DictWrapper(dict):
+    """Dictionary subclass enabling attribute-style access (e.g. obj.key)"""
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f"'DictWrapper' object has no attribute '{name}'")
+
+    def __setattr__(self, name, value):
+        self[name] = value
 
 async def get_current_user(
     request: Request,
-    db: Session = Depends(get_db)
-) -> User:
+    db = Depends(get_db)
+) -> DictWrapper:
     """
     Dependency to get current authenticated user from JWT token
-    
-    Args:
-        request: HTTP request
-        db: Database session
-    
-    Returns:
-        Current user object
-    
-    Raises:
-        HTTPException: If token is invalid or user not found
     """
     auth_header = request.headers.get("Authorization")
     
@@ -46,13 +42,15 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user = db.query(User).filter(User.email == email).first()
+    user_dict = await db.users.find_one({"email": email})
     
-    if not user:
+    if not user_dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
+    
+    user = DictWrapper(user_dict)
     
     if not user.is_active:
         raise HTTPException(
@@ -63,20 +61,9 @@ async def get_current_user(
     return user
 
 async def get_current_active_user(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    """
-    Dependency to ensure current user is active
-    
-    Args:
-        current_user: Current authenticated user
-    
-    Returns:
-        Current active user
-    
-    Raises:
-        HTTPException: If user is not active
-    """
+    current_user: DictWrapper = Depends(get_current_user),
+) -> DictWrapper:
+    """Ensure current user is active"""
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -85,30 +72,10 @@ async def get_current_active_user(
     return current_user
 
 def get_user_with_role(required_roles: list[UserRole]):
-    """
-    Factory function to create a dependency that checks user role
-    
-    Args:
-        required_roles: List of allowed roles
-    
-    Returns:
-        Async dependency function
-    """
+    """Factory function to create a dependency that checks user role"""
     async def verify_role(
-        current_user: User = Depends(get_current_active_user),
-    ) -> User:
-        """
-        Verify that current user has one of the required roles
-        
-        Args:
-            current_user: Current authenticated user
-        
-        Returns:
-            Current user if role is authorized
-        
-        Raises:
-            HTTPException: If user role is not authorized
-        """
+        current_user: DictWrapper = Depends(get_current_active_user),
+    ) -> DictWrapper:
         if current_user.role not in required_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -118,22 +85,17 @@ def get_user_with_role(required_roles: list[UserRole]):
     
     return verify_role
 
-# Specific role dependencies
 async def get_doctor_user(
-    current_user: User = Depends(get_user_with_role([UserRole.DOCTOR])),
-) -> User:
-    """Dependency for doctor-only endpoints"""
+    current_user: DictWrapper = Depends(get_user_with_role([UserRole.DOCTOR])),
+) -> DictWrapper:
     return current_user
 
 async def get_patient_user(
-    current_user: User = Depends(get_user_with_role([UserRole.PATIENT])),
-) -> User:
-    """Dependency for patient-only endpoints"""
+    current_user: DictWrapper = Depends(get_user_with_role([UserRole.PATIENT])),
+) -> DictWrapper:
     return current_user
 
 async def get_lab_user(
-    current_user: User = Depends(get_user_with_role([UserRole.LAB])),
-) -> User:
-    """Dependency for lab-only endpoints"""
+    current_user: DictWrapper = Depends(get_user_with_role([UserRole.LAB])),
+) -> DictWrapper:
     return current_user
-

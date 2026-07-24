@@ -7,8 +7,9 @@ load_dotenv()
 class Settings(BaseSettings):
     """Application configuration from environment variables"""
     
-    # Database
-    DATABASE_URL: str = "mysql+mysql-connector-python://root:password@localhost:3306/cliniq_db"
+    # Database (MongoDB)
+    MONGODB_URL: str = "mongodb://localhost:27017"
+    DATABASE_NAME: str = "cliniq_db"
     
     # JWT
     SECRET_KEY: str = "your-secret-key-change-in-production"
@@ -38,10 +39,6 @@ class Settings(BaseSettings):
     # Google AI API Key for Genkit integration
     GOOGLE_AI_API_KEY: str = ""
     GENAI_API_KEY: str = ""  # Alternative env var
-    
-    # COMMENTED OUT - Ollama configuration (uncomment to use Ollama instead)
-    # OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    # OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama2")
     
     # PDF Processing
     PDF_MAX_SIZE: int = 52428800  # 50MB default

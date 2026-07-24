@@ -1,78 +1,72 @@
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine.url import make_url
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import sessionmaker, declarative_base
+import asyncio
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument, IndexModel, ASCENDING
 from config import settings
 
-# Create database engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,  # Print SQL queries in debug mode
-    pool_pre_ping=True,   # Verify connections before using
-    pool_recycle=3600     # Recycle connections every hour
-)
+class MongoDBManager:
+    client: AsyncIOMotorClient = None
+    db = None
 
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create base class for models
-Base = declarative_base()
+db_manager = MongoDBManager()
 
 def get_db():
-    """Dependency to get database session"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    """Dependency to get MongoDB database instance"""
+    return db_manager.db
 
-def init_db():
-    """Initialize database tables"""
-    try:
-        Base.metadata.create_all(bind=engine)
-        return
-    except OperationalError as e:
-        # If the database itself doesn't exist yet (common in fresh dev setups),
-        # create it and retry table creation.
-        if _is_unknown_database_error(e) and _create_database_if_missing():
-            Base.metadata.create_all(bind=engine)
-            return
-        raise
+async def connect_to_mongo():
+    """Initialize MongoDB connection client"""
+    db_manager.client = AsyncIOMotorClient(settings.MONGODB_URL)
+    db_manager.db = db_manager.client[settings.DATABASE_NAME]
+    print(f"Connected to MongoDB at {settings.MONGODB_URL}/{settings.DATABASE_NAME}")
 
+async def close_mongo_connection():
+    """Close MongoDB connection client"""
+    if db_manager.client:
+        db_manager.client.close()
+        print("Closed MongoDB connection.")
 
-def _is_unknown_database_error(err: OperationalError) -> bool:
-    # PyMySQL: (1049, "Unknown database 'cliniq_db'")
-    msg = str(err).lower()
-    if "unknown database" in msg:
-        return True
-    orig = getattr(err, "orig", None)
-    if orig is not None:
-        args = getattr(orig, "args", ())
-        if isinstance(args, tuple) and args:
-            code = args[0]
-            if code == 1049:
-                return True
-    return False
-
-
-def _create_database_if_missing() -> bool:
-    url = make_url(settings.DATABASE_URL)
-    db_name = url.database
-    if not db_name:
-        return False
-
-    # Connect without selecting a database, so we can create it.
-    server_url = url.set(database=None)
-    tmp_engine = create_engine(
-        server_url,
-        echo=settings.DEBUG,
-        pool_pre_ping=True,
-        pool_recycle=3600,
+async def get_next_sequence_value(sequence_name: str) -> int:
+    """
+    Atomically generates sequential integer IDs for collections
+    to preserve integer ID compatibility with the Android frontend.
+    """
+    db = get_db()
+    result = await db.counters.find_one_and_update(
+        {"_id": sequence_name},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER
     )
-    try:
-        with tmp_engine.connect() as conn:
-            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}`"))
-            conn.commit()
-        return True
-    finally:
-        tmp_engine.dispose()
+    return result["seq"]
+
+async def init_db():
+    """Create database indexes on MongoDB startup"""
+    await connect_to_mongo()
+    db = get_db()
+
+    # Users collection indexes
+    await db.users.create_index("id", unique=True)
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("username", unique=True)
+    await db.users.create_index("doctor_code", sparse=True)
+    await db.users.create_index("role")
+
+    # Doctor Appointments indexes
+    await db.doctor_appointments.create_index("id", unique=True)
+    await db.doctor_appointments.create_index("patient_id")
+    await db.doctor_appointments.create_index("doctor_id")
+
+    # Lab Appointments indexes
+    await db.lab_appointments.create_index("id", unique=True)
+    await db.lab_appointments.create_index("patient_id")
+    await db.lab_appointments.create_index("lab_id")
+
+    # Lab Reports indexes
+    await db.lab_reports.create_index("id", unique=True)
+    await db.lab_reports.create_index("appointment_id", unique=True)
+    await db.lab_reports.create_index("uploaded_by_id")
+
+    # Queries indexes
+    await db.queries.create_index("id", unique=True)
+    await db.queries.create_index("patient_id")
+    await db.queries.create_index("doctor_id")
