@@ -7,7 +7,8 @@ from database import get_db
 from models import UserRole
 from schemas import (
     PatientProfileUpdate, LinkDoctorRequest, PatientProfileResponse,
-    LabReportResponse, DoctorAppointmentResponse, LabAppointmentResponse
+    LabReportResponse, DoctorAppointmentResponse, LabAppointmentResponse,
+    MyPatientsResponse, UserResponse
 )
 from dependencies import get_current_active_user, get_patient_user, get_doctor_user, DictWrapper
 
@@ -196,6 +197,7 @@ async def regenerate_doctor_code(
 
 @router.get(
     "/my-patients",
+    response_model=MyPatientsResponse,
     tags=["profiles"],
     summary="Get my linked patients",
     description="Get all patients linked to current doctor"
@@ -210,6 +212,9 @@ async def get_my_patients(
         "role": UserRole.PATIENT.value
     })
     patients = await cursor.to_list(length=1000)
+    for p in patients:
+        p.pop("_id", None)
+        p.pop("hashed_password", None)
     
     return {
         "doctor_id": current_user.id,
@@ -219,6 +224,7 @@ async def get_my_patients(
 
 @router.get(
     "/patient/{patient_id}",
+    response_model=UserResponse,
     tags=["profiles"],
     summary="Get patient details",
     description="Get details of a patient linked to current doctor"
@@ -247,6 +253,8 @@ async def get_patient_by_id(
             detail="Patient is not linked to you"
         )
     
+    patient.pop("_id", None)
+    patient.pop("hashed_password", None)
     return patient
 
 @router.get(

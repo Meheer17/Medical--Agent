@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # Google AI API Key for Genkit integration
     GOOGLE_AI_API_KEY: str = ""
     GENAI_API_KEY: str = ""  # Alternative env var
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     
     # PDF Processing
     PDF_MAX_SIZE: int = 52428800  # 50MB default
